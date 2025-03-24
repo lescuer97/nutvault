@@ -1,11 +1,11 @@
 package signer
 
 import (
-	// "context"
-	// "testing"
+// "context"
+// "testing"
 
-	// "github.com/lescuer97/nutmix/api/cashu"
-	// mockdb "github.com/lescuer97/nutmix/internal/database/mock_db"
+// "github.com/lescuer97/nutmix/api/cashu"
+// mockdb "github.com/lescuer97/nutmix/internal/database/mock_db"
 )
 
 const MintPrivateKey string = "0000000000000000000000000000000000000000000000000000000000000001"

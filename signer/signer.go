@@ -148,7 +148,7 @@ func (l *Signer) GetKeys() (GetKeysetsResponse, error) {
 		return response, fmt.Errorf(" l.db.GetAllSeeds(). %w", err)
 	}
 	for _, seed := range seeds {
-		response.Keysets = append(response.Keysets, cashu.BasicKeysetResponse{Id: seed.Id, Unit: seed.Unit, Active: seed.Active, InputFeePpk: seed.InputFeePpk})
+		response.Keysets = append(response.Keysets, BasicKeysetResponse{Id: seed.Id, Unit: seed.Unit, Active: seed.Active, InputFeePpk: seed.InputFeePpk})
 	}
 	return response, nil
 }
@@ -414,12 +414,13 @@ func (l *Signer) validateProof(proof cashu.Proof, checkOutputs *bool, pubkeysFro
 	return nil
 
 }
-func (l *Signer) GetSignerPubkey() (string, error) {
+// returns serialized compressed public key
+func (l *Signer) GetSignerPubkey() ([]byte, error) {
 
 	mintPrivateKey, err := l.getSignerPrivateKey()
 	if err != nil {
-		return "", fmt.Errorf(`l.getSignerPrivateKey() %w`, err)
+		return []byte{}, fmt.Errorf(`l.getSignerPrivateKey() %w`, err)
 	}
 
-	return hex.EncodeToString(mintPrivateKey.PubKey().SerializeCompressed()), nil
+	return mintPrivateKey.PubKey().SerializeCompressed(), nil
 }

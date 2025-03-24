@@ -1,10 +1,11 @@
 syntax = "proto3";
 
 package proto_signer;
+option go_package = "nutmix_remote_signer/proto_signer";
 
-service Signatory {
-  rpc BlindSign (BlindedMessage) returns (BlindSignature);
-  rpc VerifyProof (Proof) returns (Success);
+service Signer {
+  rpc BlindSign (BlindedMessages) returns (BlindSignatures);
+  rpc VerifyProofs (Proofs) returns (Success);
   rpc Keys (EmptyRequest) returns (KeysResponse);
   rpc KeysById (Id) returns (KeysResponse);
   rpc Keyset (EmptyRequest) returns (KeysetResponse);
@@ -23,6 +24,9 @@ message Id {
     string id  = 1;
 }
 
+message Proofs {
+    repeated Proof proof = 1;
+}
 message Proof {
     uint64 amount = 1;
     string keyset_id = 2;
@@ -38,6 +42,9 @@ message ProofDLEQ {
     bytes r = 3;
 }
 
+message BlindSignatures {
+    repeated BlindSignature blind_signatures = 1;
+}
 message BlindSignature {
     uint64 amount = 1;
     string keyset_id = 2;
@@ -51,6 +58,9 @@ message BlindSignatureDLEQ {
 }
 
 
+message BlindedMessages {
+    repeated BlindedMessage blinded_messages = 1;
+}
 // Represents a blinded message
 message BlindedMessage {
     uint64 amount = 1;
@@ -103,3 +113,4 @@ message Keyset {
   bool active = 3;
   uint32 input_fee_ppk = 4;
 }
+

@@ -9,13 +9,14 @@ import (
 	"log"
 
 	"github.com/lescuer97/nutmix/api/cashu"
-	"github.com/pressly/goose/v3"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/pressly/goose/v3"
 )
 
 type SqliteDB struct {
 	Db *sql.DB
 }
+
 //go:embed migrations/*.sql
 var embedMigrations embed.FS
 
@@ -43,8 +44,8 @@ func DatabaseSetup(ctx context.Context, databaseDir string) (SqliteDB, error) {
 	return sqlitedb, nil
 }
 
-func (sq *SqliteDB) GetAllSeeds( ) ([]cashu.Seed, error) {
-        seeds := []cashu.Seed{}
+func (sq *SqliteDB) GetAllSeeds() ([]cashu.Seed, error) {
+	seeds := []cashu.Seed{}
 	stmt, err := sq.Db.Prepare(`SELECT  created_at, active, version, unit, id,  "input_fee_ppk" FROM seeds ORDER BY version DESC`)
 	if err != nil {
 		return seeds, fmt.Errorf(`SELECT  created_at, active, version, unit, id,  "input_fee_ppk" FROM seeds ORDER BY version DESC %w`, err)
@@ -66,11 +67,11 @@ func (sq *SqliteDB) GetAllSeeds( ) ([]cashu.Seed, error) {
 
 		seeds = append(seeds, seed)
 	}
-        return seeds, nil
+	return seeds, nil
 }
 
 func (sq *SqliteDB) GetSeedsByUnit(tx *sql.Tx, unit cashu.Unit) ([]cashu.Seed, error) {
-        seeds := []cashu.Seed{}
+	seeds := []cashu.Seed{}
 	stmt, err := tx.Prepare("SELECT  created_at, active, version, unit, id, input_fee_ppk FROM seeds WHERE unit = $1")
 	if err != nil {
 		return seeds, fmt.Errorf(`tx.Prepare("SELECT  created_at, active, version, unit, id, input_fee_ppk FROM seeds WHERE unit = $1"). %w`, err)
@@ -92,7 +93,7 @@ func (sq *SqliteDB) GetSeedsByUnit(tx *sql.Tx, unit cashu.Unit) ([]cashu.Seed, e
 
 		seeds = append(seeds, seed)
 	}
-        return seeds, nil
+	return seeds, nil
 }
 func (sq *SqliteDB) SaveNewSeed(tx *sql.Tx, seed cashu.Seed) error {
 
@@ -114,19 +115,19 @@ func (sq *SqliteDB) SaveNewSeed(tx *sql.Tx, seed cashu.Seed) error {
 }
 
 func (sq *SqliteDB) UpdateSeedsActiveStatus(tx *sql.Tx, seeds []cashu.Seed) error {
-    stmt, err := tx.Prepare("UPDATE seeds SET active = ? WHERE id = ?")
-    if err != nil {
-        return fmt.Errorf(`UPDATE seeds SET active = ? WHERE id = ?: %w`, err)
-    }
-    defer stmt.Close()
+	stmt, err := tx.Prepare("UPDATE seeds SET active = ? WHERE id = ?")
+	if err != nil {
+		return fmt.Errorf(`UPDATE seeds SET active = ? WHERE id = ?: %w`, err)
+	}
+	defer stmt.Close()
 
-    for _, seed := range seeds {
-        _, err := stmt.Exec(seed.Active, seed.Id)
-        if err != nil {
-            return fmt.Errorf("stmt.Exec(seed.Active, seed.ID): %w", err)
-        }
-    }
-    
-    return nil
+	for _, seed := range seeds {
+		_, err := stmt.Exec(seed.Active, seed.Id)
+		if err != nil {
+			return fmt.Errorf("stmt.Exec(seed.Active, seed.ID): %w", err)
+		}
+	}
+
+	return nil
 
 }

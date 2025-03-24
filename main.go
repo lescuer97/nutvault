@@ -4,14 +4,14 @@ import (
 	"context"
 	"log"
 	"net"
-	"net/http"
 	"nutmix_remote_signer/database"
+	sig "nutmix_remote_signer/gen"
 	"nutmix_remote_signer/routes"
 	"nutmix_remote_signer/signer"
 	"os"
 
-	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"google.golang.org/grpc"
 )
 
 const socketPath = "/tmp/signer.sock"
@@ -42,13 +42,11 @@ func main() {
 		log.Panicf(`database.DatabaseSetup(ctx, "migrations"). %+v`, err)
 	}
 
-	router := gin.Default()
 	signer, err := signer.SetupLocalSigner(sqlite)
 	if err != nil {
 		log.Panicf(`signer.SetupLocalSigner(sqlite). %+v`, err)
 	}
 
-	routes.Routes(router,signer )
 	// Create Unix listener
 	listener, err := net.Listen("unix", abstractSocket)
 	if err != nil {
@@ -56,5 +54,18 @@ func main() {
 	}
 
 	log.Printf("Listening on unix socket: %s", abstractSocket)
-	http.Serve(listener, router)
+	// Create a new gRPC server
+	s := grpc.NewServer()
+
+	// Register the service
+	sig.RegisterSignerServer(s, &routes.Server{
+		Signer: signer,
+	})
+
+	log.Printf("Server listening on unix socket: %s", abstractSocket)
+
+	// Serve gRPC requests
+	if err := s.Serve(listener); err != nil {
+		log.Fatalf("Failed to serve: %v", err)
+	}
 }
