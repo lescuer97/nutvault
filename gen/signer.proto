@@ -6,15 +6,20 @@ option go_package = "nutmix_remote_signer/proto_signer";
 service Signer {
   rpc BlindSign (BlindedMessages) returns (BlindSignatures);
   rpc VerifyProofs (Proofs) returns (Success);
-  rpc Keys (EmptyRequest) returns (KeysResponse);
+  rpc ActiveKeys (EmptyRequest) returns (KeysResponse);
   rpc KeysById (Id) returns (KeysResponse);
-  rpc Keyset (EmptyRequest) returns (KeysetResponse);
+  rpc Keysets (EmptyRequest) returns (KeysetResponse);
   rpc Pubkey (EmptyRequest) returns (PublicKey);
+  rpc RotateKeyset (RotationRequest) returns (Success);
 }
 message EmptyRequest {}
 
 message Success {
     bool success  = 1;
+}
+message RotationRequest {
+    string unit  = 1;
+    uint32 fee  = 2;
 }
 message PublicKey {
     bytes pubkey  = 1;
@@ -33,7 +38,6 @@ message Proof {
     bytes secret = 3;
     bytes C = 4;
     optional Witness witness = 5;
-    optional ProofDLEQ dleq = 6;
 }
 
 message ProofDLEQ {
@@ -66,7 +70,6 @@ message BlindedMessage {
     uint64 amount = 1;
     string keyset_id = 2;
     bytes blinded_secret = 3;
-    optional Witness witness = 4; // This field is optional by default in proto3
 }
 
 // Witness type

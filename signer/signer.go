@@ -7,7 +7,6 @@ import (
 	"nutmix_remote_signer/database"
 	"os"
 	"sort"
-	"strconv"
 	"time"
 
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -81,7 +80,21 @@ func SetupLocalSigner(db database.SqliteDB) (Signer, error) {
 
 }
 
-// gets all active keys
+func (l *Signer) GetKeysById(id string) (GetKeysResponse, error) {
+
+	val, exists := l.keysets[id]
+	if exists {
+		var keys []cashu.MintKey
+		for _, key := range val {
+			keys = append(keys, key)
+		}
+
+		return OrderKeysetByUnit(keys), nil
+
+	}
+	return GetKeysResponse{}, ErrNoKeysetFound
+}
+
 func (l *Signer) GetActiveKeys() (GetKeysResponse, error) {
 	// convert map to slice
 	var keys []cashu.MintKey
@@ -98,50 +111,7 @@ func (l *Signer) GetActiveKeys() (GetKeysResponse, error) {
 	return OrderKeysetByUnit(keys), nil
 }
 
-func (l *Signer) GetKeysById(id string) (GetKeysResponse, error) {
-
-	val, exists := l.keysets[id]
-	if exists {
-		var keys []cashu.MintKey
-		for _, key := range val {
-			keys = append(keys, key)
-		}
-
-		return OrderKeysetByUnit(keys), nil
-
-	}
-	return GetKeysResponse{}, ErrNoKeysetFound
-}
-func (l *Signer) GetKeysByUnit(unit cashu.Unit) ([]cashu.Keyset, error) {
-	var keys []cashu.Keyset
-
-	for _, mintKey := range l.keysets {
-
-		if len(mintKey) > 0 {
-
-			if mintKey[0].Unit == unit.String() {
-
-				keysetResp := cashu.Keyset{
-					Id:          mintKey[0].Id,
-					Unit:        mintKey[0].Unit,
-					InputFeePpk: mintKey[0].InputFeePpk,
-					Keys:        make(map[string]string),
-				}
-
-				for _, keyset := range mintKey {
-					keysetResp.Keys[strconv.FormatUint(keyset.Amount, 10)] = hex.EncodeToString(keyset.PrivKey.PubKey().SerializeCompressed())
-				}
-
-				keys = append(keys, keysetResp)
-			}
-
-		}
-	}
-	return keys, nil
-}
-
-// gets all keys from the signer
-func (l *Signer) GetKeys() (GetKeysetsResponse, error) {
+func (l *Signer) GetKeysets() (GetKeysetsResponse, error) {
 	var response GetKeysetsResponse
 	seeds, err := l.db.GetAllSeeds()
 	if err != nil {
@@ -267,38 +237,6 @@ func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint) error {
 	return nil
 }
 
-func (l *Signer) signBlindMessage(k *secp256k1.PrivateKey, message cashu.BlindedMessage) (cashu.BlindSignature, error) {
-	var blindSignature cashu.BlindSignature
-
-	decodedBlindFactor, err := hex.DecodeString(message.B_)
-
-	if err != nil {
-		return blindSignature, fmt.Errorf("DecodeString: %w", err)
-	}
-
-	B_, err := secp256k1.ParsePubKey(decodedBlindFactor)
-
-	if err != nil {
-		return blindSignature, fmt.Errorf("ParsePubKey: %w", err)
-	}
-
-	C_ := crypto.SignBlindedMessage(B_, k)
-
-	blindSig := cashu.BlindSignature{
-		Amount: message.Amount,
-		Id:     message.Id,
-		C_:     hex.EncodeToString(C_.SerializeCompressed()),
-	}
-
-	err = blindSig.GenerateDLEQ(B_, k)
-
-	if err != nil {
-		return blindSig, fmt.Errorf("blindSig.GenerateDLEQ: %w", err)
-	}
-
-	return blindSig, nil
-}
-
 func (l *Signer) SignBlindMessages(messages []cashu.BlindedMessage) ([]cashu.BlindSignature, []cashu.RecoverSigDB, error) {
 	var blindedSignatures []cashu.BlindSignature
 	var recoverSigDB []cashu.RecoverSigDB
@@ -414,6 +352,7 @@ func (l *Signer) validateProof(proof cashu.Proof, checkOutputs *bool, pubkeysFro
 	return nil
 
 }
+
 // returns serialized compressed public key
 func (l *Signer) GetSignerPubkey() ([]byte, error) {
 

@@ -23,10 +23,10 @@ func OrderKeysetByUnit(keysets []cashu.MintKey) GetKeysResponse {
 
 	res := GetKeysResponse{}
 
-	res.Keysets = []KeysetResponse{}
+	res.Keysets = []KeysMapResponse{}
 
 	for _, value := range typesOfUnits {
-		var keysetResponse KeysetResponse
+		var keysetResponse KeysMapResponse
 		keysetResponse.Id = value[0].Id
 		keysetResponse.Unit = value[0].Unit
 		keysetResponse.Keys = make(map[string]string)

@@ -10,13 +10,13 @@ func ConvertKeysToSig(keys signer.GetKeysResponse) *sig.KeysResponse {
 		Keysets: make([]*sig.Keys, len(keys.Keysets)),
 	}
 
-	// sig.ConvertKeysToSig
 	for i, val := range keys.Keysets {
 		sigs.Keysets[i] = &sig.Keys{Id: val.Id, Unit: val.Unit, Keys: val.Keys, InputFeePpk: uint32(val.InputFeePpk)}
 	}
 
 	return &sigs
 }
+
 func ConvertKeyssetToSig(keys signer.GetKeysetsResponse) *sig.KeysetResponse {
 	sigs := sig.KeysetResponse{
 		Keysets: make([]*sig.Keyset, len(keys.Keysets)),

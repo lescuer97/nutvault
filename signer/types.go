@@ -7,13 +7,13 @@ import (
 var ErrNoKeysetFound = errors.New("No keyset found")
 
 type GetKeysResponse struct {
-	Keysets []KeysetResponse `json:"keysets"`
+	Keysets []KeysMapResponse `json:"keysets"`
 }
 type GetKeysetsResponse struct {
 	Keysets []BasicKeysetResponse `json:"keysets"`
 }
 
-type KeysetResponse struct {
+type KeysMapResponse struct {
 	Id          string            `json:"id"`
 	Unit        string            `json:"unit"`
 	Keys        map[string]string `json:"keys"`
