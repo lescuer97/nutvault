@@ -339,27 +339,19 @@ func (l *Signer) validateProof(proof goNutsCashu.Proof, checkOutputs *bool, pubk
 		return err
 	}
 
-	knownSecret, err := nut10.DeserializeSecret(proof.Secret)
-	if err != nil {
-		err = fmt.Errorf("nut10.DeserializeSecret(proof.Secret)): %w %w", cashu.ErrInvalidProof, err)
-		return err
-	}
-
-	if knownSecret.Kind != nut10.AnyoneCanSpend {
-		switch knownSecret.Kind {
-		case nut10.P2PK:
-			err := verifyP2PKLockedProof(proof, knownSecret)
-			if err != nil {
-				return fmt.Errorf("l.VerifyP2PK(proof, knownSecret): %w %w", cashu.ErrInvalidProof, err)
+	nut10Secret, err := nut10.DeserializeSecret(proof.Secret)
+	if err == nil {
+		if nut10Secret.Kind == nut10.P2PK {
+			if err := verifyP2PKLockedProof(proof, nut10Secret); err != nil {
+				return fmt.Errorf("verifyP2PKLockedProof(proof, nut10Secret); err != nil : %w %w", cashu.ErrInvalidProof, err)
 			}
-
-		case nut10.HTLC:
-			err := verifyHTLCProof(proof, knownSecret)
-			if err != nil {
-				return fmt.Errorf("verifyHTLCProof(proof, knownSecret): %w %w", cashu.ErrInvalidProof, err)
+			// m.logDebugf("verified P2PK locked proof")
+		} else if nut10Secret.Kind == nut10.HTLC {
+			if err := verifyHTLCProof(proof, nut10Secret); err != nil {
+				return fmt.Errorf("verifyP2PKLockedProof(proof, nut10Secret); err != nil ; err != nil : %w %w", cashu.ErrInvalidProof, err)
 			}
+			// m.logDebugf("verified HTLC proof")
 		}
-
 	}
 
 	return nil
@@ -377,8 +369,10 @@ func (l *Signer) GetSignerPubkey() ([]byte, error) {
 }
 func verifyP2PKLockedProof(proof goNutsCashu.Proof, proofSecret nut10.WellKnownSecret) error {
 	var p2pkWitness nut11.P2PKWitness
-	json.Unmarshal([]byte(proof.Witness), &p2pkWitness)
-
+	err := json.Unmarshal([]byte(proof.Witness), &p2pkWitness)
+	if err != nil {
+		return err
+	}
 	p2pkTags, err := nut11.ParseP2PKTags(proofSecret.Data.Tags)
 	if err != nil {
 		return err
@@ -433,8 +427,11 @@ func verifyP2PKLockedProof(proof goNutsCashu.Proof, proofSecret nut10.WellKnownS
 
 func verifyHTLCProof(proof goNutsCashu.Proof, proofSecret nut10.WellKnownSecret) error {
 	var htlcWitness nut14.HTLCWitness
-	json.Unmarshal([]byte(proof.Witness), &htlcWitness)
+	err := json.Unmarshal([]byte(proof.Witness), &htlcWitness)
 
+	if err != nil {
+		return err
+	}
 	p2pkTags, err := nut11.ParseP2PKTags(proofSecret.Data.Tags)
 	if err != nil {
 		return err

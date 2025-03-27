@@ -3,12 +3,16 @@ package routes
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
-	goNutsCashu "github.com/elnosh/gonuts/cashu"
-	"github.com/lescuer97/nutmix/api/cashu"
 	"log"
 	sig "nutmix_remote_signer/gen"
 	"nutmix_remote_signer/signer"
+
+	goNutsCashu "github.com/elnosh/gonuts/cashu"
+	"github.com/elnosh/gonuts/cashu/nuts/nut11"
+	"github.com/elnosh/gonuts/cashu/nuts/nut14"
+	"github.com/lescuer97/nutmix/api/cashu"
 )
 
 type Server struct {
@@ -60,7 +64,32 @@ func (s *Server) BlindSign(ctx context.Context, message *sig.BlindedMessages) (*
 func (s *Server) VerifyProofs(ctx context.Context, proofs *sig.Proofs) (*sig.Success, error) {
 	cashuProofs := goNutsCashu.Proofs{}
 	for _, val := range proofs.Proof {
-		cashuProofs = append(cashuProofs, goNutsCashu.Proof{Amount: val.Amount, Id: val.KeysetId, C: hex.EncodeToString(val.C), Witness: val.Witness.String(), Secret: string(val.Secret)})
+		htlcWitness := val.Witness.GetHtlcWitness()
+		p2pkWitness := val.Witness.GetP2PkWitness()
+		var witness string = ""
+
+		if p2pkWitness != nil {
+			wit := nut11.P2PKWitness{
+				Signatures: p2pkWitness.Signatures,
+			}
+			witnessBytes, err := json.Marshal(wit)
+			if err != nil {
+				return nil, fmt.Errorf("s.Signer.VerifyProofs(cashuProofs, []cashu.BlindedMessage{}). %w", err)
+			}
+			witness = string(witnessBytes)
+		} else if htlcWitness != nil {
+			wit := nut14.HTLCWitness{
+				Signatures: htlcWitness.Signatures,
+				Preimage:   htlcWitness.Preimage,
+			}
+			witnessBytes, err := json.Marshal(wit)
+			if err != nil {
+				return nil, fmt.Errorf("s.Signer.VerifyProofs(cashuProofs, []cashu.BlindedMessage{}). %w", err)
+			}
+			witness = string(witnessBytes)
+		}
+
+		cashuProofs = append(cashuProofs, goNutsCashu.Proof{Amount: val.Amount, Id: val.KeysetId, C: hex.EncodeToString(val.C), Witness: witness, Secret: string(val.Secret)})
 	}
 	log.Printf("\n proofs %+v", cashuProofs)
 	err := s.Signer.VerifyProofs(cashuProofs, goNutsCashu.BlindedMessages{})
@@ -130,41 +159,3 @@ func (s *Server) RotateKeyset(ctx context.Context, req *sig.RotationRequest) (*s
 	success.Success = true
 	return &success, nil
 }
-
-// 	r.POST("/blind_sign", func(c *gin.Context) {
-//
-// 		var messages []cashu.BlindedMessage
-// 		err := c.ShouldBindJSON(&messages)
-// 		if err != nil {
-// 			c.Error(fmt.Errorf("c.ShouldBindJSON(&messages). %w", err))
-// 			c.JSON(400, "Malformed body request")
-// 			return
-// 		}
-// 		_, recoverySig, err := signer.SignBlindMessages(messages)
-// 		if err != nil {
-// 			c.Error(fmt.Errorf("signer.GetKeys(). %w", err))
-// 			c.JSON(500, "Server side error")
-// 			return
-// 		}
-//
-// 		c.JSON(200, recoverySig)
-// 	})
-// 	r.POST("/verify_proofs", func(c *gin.Context) {
-// 		var proofs cashu.Proofs
-// 		err := c.ShouldBindJSON(&proofs)
-// 		if err != nil {
-// 			c.Error(fmt.Errorf("c.ShouldBindJSON(&proofs). %w", err))
-// 			c.JSON(400, "Malformed body request")
-// 			return
-// 		}
-//
-// 		keys, err := signer.GetKeys()
-// 		if err != nil {
-// 			c.Error(fmt.Errorf("signer.GetKeys(). %w", err))
-// 			c.JSON(500, "Server side error")
-// 			return
-// 		}
-//
-// 		c.JSON(200, keys)
-// 	})
-//
