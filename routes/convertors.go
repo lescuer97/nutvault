@@ -2,22 +2,32 @@ package routes
 
 import (
 	sig "nutmix_remote_signer/gen"
-	"nutmix_remote_signer/signer"
+	"strconv"
+
+	"github.com/elnosh/gonuts/cashu/nuts/nut01"
+	"github.com/elnosh/gonuts/cashu/nuts/nut02"
 )
 
-func ConvertKeysToSig(keys signer.GetKeysResponse) *sig.KeysResponse {
+func ConvertKeysToSig(keys nut01.GetKeysResponse) *sig.KeysResponse {
 	sigs := sig.KeysResponse{
 		Keysets: make([]*sig.Keys, len(keys.Keysets)),
 	}
 
 	for i, val := range keys.Keysets {
-		sigs.Keysets[i] = &sig.Keys{Id: val.Id, Unit: val.Unit, Keys: val.Keys, InputFeePpk: uint32(val.InputFeePpk)}
+
+		keyMap := make(map[string]string)
+
+		for val, key := range val.Keys {
+			keyMap[strconv.FormatUint(val, 10)] = key
+		}
+
+		sigs.Keysets[i] = &sig.Keys{Id: val.Id, Unit: val.Unit, Keys: keyMap}
 	}
 
 	return &sigs
 }
 
-func ConvertKeyssetToSig(keys signer.GetKeysetsResponse) *sig.KeysetResponse {
+func ConvertKeyssetToSig(keys nut02.GetKeysetsResponse) *sig.KeysetResponse {
 	sigs := sig.KeysetResponse{
 		Keysets: make([]*sig.Keyset, len(keys.Keysets)),
 	}

@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	goNutsCashu "github.com/elnosh/gonuts/cashu"
+	"github.com/lescuer97/nutmix/api/cashu"
 	"log"
 	sig "nutmix_remote_signer/gen"
 	"nutmix_remote_signer/signer"
-
-	"github.com/lescuer97/nutmix/api/cashu"
 )
 
 type Server struct {
@@ -17,12 +17,12 @@ type Server struct {
 }
 
 func (s *Server) BlindSign(ctx context.Context, message *sig.BlindedMessages) (*sig.BlindSignatures, error) {
-	blindMessages := []cashu.BlindedMessage{}
+	blindMessages := goNutsCashu.BlindedMessages{}
 	for _, val := range message.BlindedMessages {
-		blindMessages = append(blindMessages, cashu.BlindedMessage{Amount: val.Amount, Id: val.KeysetId, B_: hex.EncodeToString(val.BlindedSecret)})
+		blindMessages = append(blindMessages, goNutsCashu.BlindedMessage{Amount: val.Amount, Id: val.KeysetId, B_: hex.EncodeToString(val.BlindedSecret)})
 	}
 
-	blindSigs, _, err := s.Signer.SignBlindMessages(blindMessages)
+	blindSigs, err := s.Signer.SignBlindMessages(blindMessages)
 
 	blindSigsResponse := sig.BlindSignatures{}
 	if err != nil {
@@ -35,11 +35,22 @@ func (s *Server) BlindSign(ctx context.Context, message *sig.BlindedMessages) (*
 		if err != nil {
 			return &blindSigsResponse, fmt.Errorf("hex.DecodeString(val.C_). %w", err)
 		}
-
-		dleq := sig.BlindSignatureDLEQ{
-			E: val.Dleq.E.Serialize(),
-			S: val.Dleq.S.Serialize(),
+		EBytes, err := hex.DecodeString(val.DLEQ.E)
+		if err != nil {
+			err = fmt.Errorf("hex.DecodeString(val.DLEQ.E)): %w %w", cashu.ErrInvalidBlindMessage, err)
+			return nil, err
 		}
+
+		SBytes, err := hex.DecodeString(val.DLEQ.S)
+		if err != nil {
+			err = fmt.Errorf("hex.DecodeString(val.DLEQ.S)): %w %w", cashu.ErrInvalidBlindMessage, err)
+			return nil, err
+		}
+		dleq := sig.BlindSignatureDLEQ{
+			E: EBytes,
+			S: SBytes,
+		}
+
 		blindSigsResponse.BlindSignatures = append(blindSigsResponse.BlindSignatures, &sig.BlindSignature{Amount: val.Amount, KeysetId: val.Id, BlindedSecret: blindSec, Dleq: &dleq})
 
 	}
@@ -47,12 +58,12 @@ func (s *Server) BlindSign(ctx context.Context, message *sig.BlindedMessages) (*
 }
 
 func (s *Server) VerifyProofs(ctx context.Context, proofs *sig.Proofs) (*sig.Success, error) {
-	cashuProofs := cashu.Proofs{}
+	cashuProofs := goNutsCashu.Proofs{}
 	for _, val := range proofs.Proof {
-		cashuProofs = append(cashuProofs, cashu.Proof{Amount: val.Amount, Id: val.KeysetId, C: hex.EncodeToString(val.C), Witness: val.Witness.String(), Secret: string(val.Secret)})
+		cashuProofs = append(cashuProofs, goNutsCashu.Proof{Amount: val.Amount, Id: val.KeysetId, C: hex.EncodeToString(val.C), Witness: val.Witness.String(), Secret: string(val.Secret)})
 	}
 	log.Printf("\n proofs %+v", cashuProofs)
-	err := s.Signer.VerifyProofs(cashuProofs, []cashu.BlindedMessage{})
+	err := s.Signer.VerifyProofs(cashuProofs, goNutsCashu.BlindedMessages{})
 
 	success := sig.Success{}
 	if err != nil {
