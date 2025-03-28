@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"nutmix_remote_signer/database"
-	"os"
 	"time"
 
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -36,8 +36,13 @@ func SetupLocalSigner(db database.SqliteDB) (Signer, error) {
 	signer := Signer{
 		db: db,
 	}
+	privateKeyFromDbus, err := GetNutmixSignerKey()
+	if err != nil {
+		return signer, fmt.Errorf("signer.getSignerPrivateKey(). %w", err)
+	}
+	log.Printf("\n privateKeyFromDbus: %v", privateKeyFromDbus)
 
-	privateKey, err := signer.getSignerPrivateKey()
+	privateKey, err := signer.getSignerPrivateKey(privateKeyFromDbus)
 	if err != nil {
 		return signer, fmt.Errorf("signer.getSignerPrivateKey(). %w", err)
 	}
@@ -128,13 +133,9 @@ func (l *Signer) GetKeysets() (nut02.GetKeysetsResponse, error) {
 	return response, nil
 }
 
-func (l *Signer) getSignerPrivateKey() (*secp256k1.PrivateKey, error) {
-	mint_privkey := os.Getenv("MINT_PRIVATE_KEY")
-	if mint_privkey == "" {
-		return nil, fmt.Errorf(`os.Getenv("MINT_PRIVATE_KEY").`)
-	}
+func (l *Signer) getSignerPrivateKey(private_key string) (*secp256k1.PrivateKey, error) {
 
-	decodedPrivKey, err := hex.DecodeString(mint_privkey)
+	decodedPrivKey, err := hex.DecodeString(private_key)
 	if err != nil {
 		return nil, fmt.Errorf(`hex.DecodeString(mint_privkey). %w`, err)
 	}
@@ -191,7 +192,11 @@ func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint) error {
 		seeds[i].Active = false
 	}
 
-	mintPrivateKey, err := l.getSignerPrivateKey()
+	privateKeyFromDbus, err := GetNutmixSignerKey()
+	if err != nil {
+		return fmt.Errorf("signer.getSignerPrivateKey(). %w", err)
+	}
+	mintPrivateKey, err := l.getSignerPrivateKey(privateKeyFromDbus)
 	if err != nil {
 		return fmt.Errorf(`l.getSignerPrivateKey() %w`, err)
 	}

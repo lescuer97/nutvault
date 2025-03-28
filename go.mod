@@ -8,6 +8,7 @@ require (
 	github.com/btcsuite/btcd/btcec/v2 v2.3.4
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.0
 	github.com/elnosh/gonuts v0.4.0
+	github.com/godbus/dbus/v5 v5.1.0
 	github.com/jackc/pgx/v5 v5.7.3
 	github.com/joho/godotenv v1.5.1
 	github.com/lescuer97/nutmix v0.0.0-20250316134157-6b582d582f1c

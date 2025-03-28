@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"log"
 	sig "nutmix_remote_signer/gen"
 	"nutmix_remote_signer/signer"
 
@@ -91,7 +90,6 @@ func (s *Server) VerifyProofs(ctx context.Context, proofs *sig.Proofs) (*sig.Suc
 
 		cashuProofs = append(cashuProofs, goNutsCashu.Proof{Amount: val.Amount, Id: val.KeysetId, C: hex.EncodeToString(val.C), Witness: witness, Secret: string(val.Secret)})
 	}
-	log.Printf("\n proofs %+v", cashuProofs)
 	err := s.Signer.VerifyProofs(cashuProofs, goNutsCashu.BlindedMessages{})
 
 	success := sig.Success{}
