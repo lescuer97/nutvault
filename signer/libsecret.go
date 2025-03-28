@@ -3,7 +3,6 @@ package signer
 import (
 	"fmt"
 	"log"
-	"os"
 
 	"github.com/godbus/dbus/v5"
 )
@@ -21,7 +20,7 @@ type SecretStructure struct {
 
 // GetNutmixSignerKey retrieves the secret key for the nutmix-remote-signer application
 // from the system's secret service (libsecret) via DBus
-func GetNutmixSignerKey() (string, error) {
+func GetNutmixSignerKey(envPrivateKey string) (string, error) {
 	// Connect to the session bus
 	conn, err := dbus.ConnectSessionBus()
 	if err != nil {
@@ -53,6 +52,7 @@ func GetNutmixSignerKey() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to search items: %v", err)
 	}
+	log.Println("trying to get private key from secret service")
 
 	// Create a session for secret transfer
 	var openSession dbus.ObjectPath
@@ -75,18 +75,12 @@ func GetNutmixSignerKey() (string, error) {
 			return "", fmt.Errorf("failed to get secret: %v", err)
 		}
 
-		log.Println("returning from the storage")
 		// Convert the secret value to a string
 		secretValue := string(secretStruct.Value)
 		return secretValue, nil
 	}
 
-	mint_privkey := os.Getenv("MINT_PRIVATE_KEY")
-	if mint_privkey == "" {
-		return "", fmt.Errorf(`os.Getenv("MINT_PRIVATE_KEY").`)
-	}
-
-	if mint_privkey == "" {
+	if envPrivateKey == "" {
 		panic("private key for the mint is not set for storage")
 	}
 	properties := map[string]dbus.Variant{
@@ -100,7 +94,7 @@ func GetNutmixSignerKey() (string, error) {
 	secret := SecretStructure{
 		Session:     openSession,
 		Parameters:  []byte{},
-		Value:       []byte(mint_privkey),
+		Value:       []byte(envPrivateKey),
 		ContentType: "text/plain",
 	}
 
@@ -118,5 +112,5 @@ func GetNutmixSignerKey() (string, error) {
 		return "", fmt.Errorf("failed to store new secret: %v", err)
 	}
 
-	return mint_privkey, nil
+	return envPrivateKey, nil
 }

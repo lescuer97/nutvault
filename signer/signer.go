@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"nutmix_remote_signer/database"
+	"os"
 	"time"
 
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -38,11 +38,11 @@ func SetupLocalSigner(db database.SqliteDB) (Signer, error) {
 	signer := Signer{
 		db: db,
 	}
-	privateKeyFromDbus, err := GetNutmixSignerKey()
+	mint_privkey := os.Getenv("MINT_PRIVATE_KEY")
+	privateKeyFromDbus, err := GetNutmixSignerKey(mint_privkey)
 	if err != nil {
 		return signer, fmt.Errorf("signer.getSignerPrivateKey(). %w", err)
 	}
-	log.Printf("\n privateKeyFromDbus: %v", privateKeyFromDbus)
 
 	privateKey, err := signer.getSignerPrivateKey(privateKeyFromDbus)
 	if err != nil {
@@ -52,6 +52,11 @@ func SetupLocalSigner(db database.SqliteDB) (Signer, error) {
 	if err != nil {
 		return signer, fmt.Errorf(" bip32.NewMasterKey(privateKey.Serialize()). %w", err)
 	}
+	defer func() {
+		privateKeyFromDbus = ""
+		privateKey = nil
+		masterKey = nil
+	}()
 
 	seeds, err := signer.db.GetAllSeeds()
 	if err != nil {
@@ -78,23 +83,18 @@ func SetupLocalSigner(db database.SqliteDB) (Signer, error) {
 		if err != nil {
 			return signer, fmt.Errorf(`tx.Commit(). %w`, err)
 		}
-
 		seeds = append(seeds, newSeed)
-
 	}
+
 	keysets, activeKeysets, err := GetKeysetsFromSeeds(seeds, masterKey)
 	if err != nil {
 		return signer, fmt.Errorf(`signer.GetKeysetsFromSeeds(seeds, masterKey). %w`, err)
 	}
-	// keysets[0]
 
 	signer.keysets = keysets
 	signer.activeKeysets = activeKeysets
 	signer.pubkey = privateKey.PubKey()
 
-	privateKey = nil
-	privateKeyFromDbus = ""
-	masterKey = nil
 	return signer, nil
 
 }
@@ -189,7 +189,7 @@ func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint) error {
 		seeds[i].Active = false
 	}
 
-	privateKeyFromDbus, err := GetNutmixSignerKey()
+	privateKeyFromDbus, err := GetNutmixSignerKey("")
 	if err != nil {
 		return fmt.Errorf("signer.getSignerPrivateKey(). %w", err)
 	}
@@ -246,10 +246,32 @@ func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint) error {
 func (l *Signer) SignBlindMessages(messages goNutsCashu.BlindedMessages) (goNutsCashu.BlindedSignatures, error) {
 	var blindedSignatures goNutsCashu.BlindedSignatures
 
-	for _, output := range messages {
-		correctKeyset := l.activeKeysets[output.Id].Keys[output.Amount]
+	indexesForGeneration := make(keysetAmounts)
+	amounts := GetAmountsForKeysets()
 
-		if correctKeyset.PrivateKey == nil || !l.activeKeysets[output.Id].Active {
+	// get index of amounts to use for generation
+	for _, output := range messages {
+		_, exists := indexesForGeneration[output.Amount]
+		if !exists {
+			i, amountExists := amounts[output.Amount]
+			if amountExists {
+				indexesForGeneration[output.Amount] = i
+			} else {
+				return nil, fmt.Errorf("No index was found for this amount: %+v", output.Amount)
+			}
+		}
+	}
+
+	keysets, err := l.GenerateMintKeysFromPublicKeysets(indexesForGeneration)
+	if err != nil {
+		err = fmt.Errorf("l.GenerateMintKeysFromPublicKeysets(indexesForGeneration): %w", err)
+		return nil, err
+	}
+
+	for _, output := range messages {
+		correctKeyset := keysets[output.Id].Keys[output.Amount]
+
+		if correctKeyset.PrivateKey == nil || !keysets[output.Id].Active {
 			return nil, cashu.UsingInactiveKeyset
 		}
 
@@ -295,34 +317,45 @@ func (l *Signer) VerifyProofs(proofs goNutsCashu.Proofs, blindMessages goNutsCas
 
 	pubkeysFromProofs := make(map[*btcec.PublicKey]bool)
 
+	indexesForGeneration := make(keysetAmounts)
+	amounts := GetAmountsForKeysets()
+
+	// get index of amounts to use for generation
 	for _, proof := range proofs {
-		err := l.validateProof(proof, &checkOutputs, &pubkeysFromProofs)
+		_, exists := indexesForGeneration[proof.Amount]
+		if !exists {
+			i, amountExists := amounts[proof.Amount]
+			if amountExists {
+				indexesForGeneration[proof.Amount] = i
+			} else {
+				return fmt.Errorf("No index was found for this amount: %+v", proof.Amount)
+			}
+		}
+	}
+
+	keysets, err := l.GenerateMintKeysFromPublicKeysets(indexesForGeneration)
+	if err != nil {
+		err = fmt.Errorf("l.GenerateMintKeysFromPublicKeysets(indexesForGeneration): %w", err)
+		return err
+	}
+
+	for _, proof := range proofs {
+		err := l.validateProof(keysets, proof, &checkOutputs, &pubkeysFromProofs)
 		if err != nil {
 			return fmt.Errorf("l.validateProof(proof, unit, &checkOutputs, &pubkeysFromProofs): %w", err)
 		}
 	}
-	// if any sig allis present all outputs also need to be check with the pubkeys from the proofs
-	// if checkOutputs {
-	// 	for _, blindMessage := range blindMessages {
-	//
-	// 		err := blindMessage.VerifyBlindMessageSignature(pubkeysFromProofs)
-	// 		if err != nil {
-	// 			return fmt.Errorf("blindMessage.VerifyBlindMessageSignature: %w", err)
-	// 		}
-	//
-	// 	}
-	// }
 
 	return nil
 }
 
-func (l *Signer) validateProof(proof goNutsCashu.Proof, checkOutputs *bool, pubkeysFromProofs *map[*btcec.PublicKey]bool) error {
-	keysets, exists := l.keysets[proof.Id]
+func (l *Signer) validateProof(keysets map[string]crypto.MintKeyset, proof goNutsCashu.Proof, checkOutputs *bool, pubkeysFromProofs *map[*btcec.PublicKey]bool) error {
+	keyset, exists := keysets[proof.Id]
 	if !exists {
 		return cashu.ErrKeysetForProofNotFound
 	}
 
-	keypair := keysets.Keys[proof.Amount]
+	keypair := keyset.Keys[proof.Amount]
 	unBlindedBytes, err := hex.DecodeString(proof.C)
 	if err != nil {
 		err = fmt.Errorf("hex.DecodeString(proof.C) %w %w", cashu.ErrInvalidProof, err)
@@ -347,12 +380,10 @@ func (l *Signer) validateProof(proof goNutsCashu.Proof, checkOutputs *bool, pubk
 			if err := verifyP2PKLockedProof(proof, nut10Secret); err != nil {
 				return fmt.Errorf("verifyP2PKLockedProof(proof, nut10Secret); err != nil : %w %w", cashu.ErrInvalidProof, err)
 			}
-			// m.logDebugf("verified P2PK locked proof")
 		} else if nut10Secret.Kind == nut10.HTLC {
 			if err := verifyHTLCProof(proof, nut10Secret); err != nil {
 				return fmt.Errorf("verifyP2PKLockedProof(proof, nut10Secret); err != nil ; err != nil : %w %w", cashu.ErrInvalidProof, err)
 			}
-			// m.logDebugf("verified HTLC proof")
 		}
 	}
 
@@ -361,9 +392,9 @@ func (l *Signer) validateProof(proof goNutsCashu.Proof, checkOutputs *bool, pubk
 
 // returns serialized compressed public key
 func (l *Signer) GetSignerPubkey() ([]byte, error) {
-
 	return l.pubkey.SerializeCompressed(), nil
 }
+
 func verifyP2PKLockedProof(proof goNutsCashu.Proof, proofSecret nut10.WellKnownSecret) error {
 	var p2pkWitness nut11.P2PKWitness
 	err := json.Unmarshal([]byte(proof.Witness), &p2pkWitness)
