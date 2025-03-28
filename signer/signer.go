@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcutil/hdkeychain"
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	goNutsCashu "github.com/elnosh/gonuts/cashu"
 	"github.com/elnosh/gonuts/cashu/nuts/nut01"
@@ -21,7 +23,6 @@ import (
 	"github.com/elnosh/gonuts/crypto"
 	"github.com/jackc/pgx/v5"
 	"github.com/lescuer97/nutmix/api/cashu"
-	"github.com/tyler-smith/go-bip32"
 )
 
 var ErrNoKeysetFound = errors.New("No keyset found")
@@ -30,7 +31,7 @@ type Signer struct {
 	keysets       map[string]crypto.MintKeyset
 	activeKeysets map[string]crypto.MintKeyset
 	db            database.SqliteDB
-	pubkey *secp256k1.PublicKey
+	pubkey        *secp256k1.PublicKey
 }
 
 func SetupLocalSigner(db database.SqliteDB) (Signer, error) {
@@ -47,10 +48,11 @@ func SetupLocalSigner(db database.SqliteDB) (Signer, error) {
 	if err != nil {
 		return signer, fmt.Errorf("signer.getSignerPrivateKey(). %w", err)
 	}
-	masterKey, err := bip32.NewMasterKey(privateKey.Serialize())
+	masterKey, err := hdkeychain.NewMaster(privateKey.Serialize(), &chaincfg.MainNetParams)
 	if err != nil {
 		return signer, fmt.Errorf(" bip32.NewMasterKey(privateKey.Serialize()). %w", err)
 	}
+
 	seeds, err := signer.db.GetAllSeeds()
 	if err != nil {
 		return signer, fmt.Errorf("signer.db.GetAllSeeds(). %w", err)
@@ -116,10 +118,6 @@ func (l *Signer) GetActiveKeys() (nut01.GetKeysResponse, error) {
 		keys = append(keys, keyset)
 	}
 
-	// sort.Slice(keys, func(i, j int) bool {
-	// 	return keys[i].Amount < keys[j].Amount
-	// })
-
 	return OrderKeysetByUnit(keys), nil
 }
 
@@ -136,7 +134,6 @@ func (l *Signer) GetKeysets() (nut02.GetKeysetsResponse, error) {
 }
 
 func (l *Signer) getSignerPrivateKey(private_key string) (*secp256k1.PrivateKey, error) {
-
 	decodedPrivKey, err := hex.DecodeString(private_key)
 	if err != nil {
 		return nil, fmt.Errorf(`hex.DecodeString(mint_privkey). %w`, err)
@@ -146,14 +143,15 @@ func (l *Signer) getSignerPrivateKey(private_key string) (*secp256k1.PrivateKey,
 	return mintKey, nil
 }
 
-func (l *Signer) createNewSeed(mintPrivateKey *bip32.Key, unit cashu.Unit, version int, fee uint) (cashu.Seed, error) {
+func (l *Signer) createNewSeed(mintPrivateKey *hdkeychain.ExtendedKey, unit cashu.Unit, version int, fee uint) (database.Seed, error) {
 	// rotate one level up
-	newSeed := cashu.Seed{
+	newSeed := database.Seed{
 		CreatedAt:   time.Now().Unix(),
 		Active:      true,
 		Version:     version,
 		Unit:        unit.String(),
 		InputFeePpk: fee,
+		Legacy:      false,
 	}
 
 	keyset, err := DeriveKeyset(mintPrivateKey, newSeed)
@@ -178,7 +176,7 @@ func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint) error {
 	defer tx.Rollback()
 
 	// get current highest seed version
-	var highestSeed cashu.Seed = cashu.Seed{Version: 0}
+	var highestSeed database.Seed = database.Seed{Version: 0}
 	seeds, err := l.db.GetSeedsByUnit(tx, unit)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -203,9 +201,9 @@ func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint) error {
 		return fmt.Errorf(`l.getSignerPrivateKey() %w`, err)
 	}
 
-	signerMasterKey, err := bip32.NewMasterKey(mintPrivateKey.Serialize())
+	signerMasterKey, err := hdkeychain.NewMaster(mintPrivateKey.Serialize(), &chaincfg.MainNetParams)
 	if err != nil {
-		return fmt.Errorf(" bip32.NewMasterKey(mintPrivateKey.Serialize()). %w", err)
+		return fmt.Errorf(" hdkeychain.NewMaster(mintPrivateKey.Serialize()). %w", err)
 	}
 
 	// Create New seed with one higher version

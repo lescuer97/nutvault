@@ -2,14 +2,13 @@ package signer
 
 import (
 	"fmt"
+	"nutmix_remote_signer/database"
 
+	"github.com/btcsuite/btcd/btcutil/hdkeychain"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/elnosh/gonuts/cashu/nuts/nut01"
 	"github.com/elnosh/gonuts/crypto"
 	"github.com/lescuer97/nutmix/api/cashu"
-
-	// "github.com/elnosh/gonuts/cashu"
-	"github.com/tyler-smith/go-bip32"
 )
 
 func OrderKeysetByUnit(keysets []crypto.MintKeyset) nut01.GetKeysResponse {
@@ -42,7 +41,7 @@ func OrderKeysetByUnit(keysets []crypto.MintKeyset) nut01.GetKeysResponse {
 	return res
 
 }
-func DeriveKeyset(mintKey *bip32.Key, seed cashu.Seed) (crypto.MintKeyset, error) {
+func DeriveKeyset(mintKey *hdkeychain.ExtendedKey, seed database.Seed) (crypto.MintKeyset, error) {
 	keyset := crypto.MintKeyset{
 		Unit:              seed.Unit,
 		InputFeePpk:       seed.InputFeePpk,
@@ -56,27 +55,17 @@ func DeriveKeyset(mintKey *bip32.Key, seed cashu.Seed) (crypto.MintKeyset, error
 		return keyset, fmt.Errorf("UnitFromString(seed.Unit) %w", err)
 	}
 
-	unitKey, err := mintKey.NewChildKey(uint32(unit.EnumIndex()))
+	if seed.Legacy {
+		err := LegacyKeyDerivation(mintKey, &keyset, seed, unit)
+		if err != nil {
+			return keyset, fmt.Errorf("LegacyKeyDerivation(mintKey,&keyset, seed, unit ) %w", err)
+		}
+	} else {
+		err := KeyDerivation(mintKey, &keyset, seed, unit)
+		if err != nil {
+			return keyset, fmt.Errorf("KeyDerivation(mintKey,&keyset, seed, unit) %w", err)
+		}
 
-	if err != nil {
-
-		return keyset, fmt.Errorf("mintKey.NewChildKey(uint32(unit.EnumIndex())). %w", err)
-	}
-
-	versionKey, err := unitKey.NewChildKey(uint32(seed.Version))
-	if err != nil {
-		return keyset, fmt.Errorf("mintKey.NewChildKey(uint32(seed.Version)) %w", err)
-	}
-
-	amounts := cashu.GetAmountsForKeysets()
-
-	if unit == cashu.AUTH {
-		amounts = []uint64{amounts[0]}
-	}
-
-	err = GenerateKeypairs(versionKey, amounts, &keyset)
-	if err != nil {
-		return keyset, fmt.Errorf(`GenerateKeypairs(versionKey, values, &keyset) %w`, err)
 	}
 
 	publicKeys := make(map[uint64]*secp256k1.PublicKey)
@@ -90,14 +79,68 @@ func DeriveKeyset(mintKey *bip32.Key, seed cashu.Seed) (crypto.MintKeyset, error
 	return keyset, nil
 }
 
-func GenerateKeypairs(versionKey *bip32.Key, values []uint64, keyset *crypto.MintKeyset) error {
+func LegacyKeyDerivation(key *hdkeychain.ExtendedKey, keyset *crypto.MintKeyset, seed database.Seed, unit cashu.Unit) error {
+	unitKey, err := key.Derive(uint32(unit.EnumIndex()))
+
+	if err != nil {
+		return fmt.Errorf("mintKey.NewChildKey(uint32(unit.EnumIndex())). %w", err)
+	}
+
+	versionKey, err := unitKey.Derive(uint32(seed.Version))
+	if err != nil {
+		return fmt.Errorf("mintKey.NewChildKey(uint32(seed.Version)) %w", err)
+	}
+
+	amounts := cashu.GetAmountsForKeysets()
+
+	if unit == cashu.AUTH {
+		amounts = []uint64{amounts[0]}
+	}
+
+	err = GenerateKeypairsLegacy(versionKey, amounts, keyset)
+	if err != nil {
+		return fmt.Errorf(`GenerateKeypairs(versionKey, values, &keyset) %w`, err)
+	}
+	return nil
+}
+
+func KeyDerivation(key *hdkeychain.ExtendedKey, keyset *crypto.MintKeyset, seed database.Seed, unit cashu.Unit) error {
+	unitKey, err := key.Derive(hdkeychain.HardenedKeyStart + uint32(unit.EnumIndex()))
+
+	if err != nil {
+		return fmt.Errorf("mintKey.NewChildKey(uint32(unit.EnumIndex())). %w", err)
+	}
+
+	versionKey, err := unitKey.Derive(hdkeychain.HardenedKeyStart + uint32(seed.Version))
+	if err != nil {
+		return fmt.Errorf("mintKey.NewChildKey(uint32(seed.Version)) %w", err)
+	}
+
+	amounts := cashu.GetAmountsForKeysets()
+
+	if unit == cashu.AUTH {
+		amounts = []uint64{amounts[0]}
+	}
+
+	err = GenerateKeypairs(versionKey, amounts, keyset)
+	if err != nil {
+		return fmt.Errorf(`GenerateKeypairs(versionKey, values, &keyset) %w`, err)
+	}
+	return nil
+}
+
+func GenerateKeypairsLegacy(versionKey *hdkeychain.ExtendedKey, values []uint64, keyset *crypto.MintKeyset) error {
 	for i, value := range values {
 		// uses the value it represents to derive the key
-		childKey, err := versionKey.NewChildKey(uint32(i))
+		childKey, err := versionKey.Derive(uint32(i))
 		if err != nil {
 			return err
 		}
-		privKey := secp256k1.PrivKeyFromBytes(childKey.Key)
+		privKey, err := childKey.ECPrivKey()
+		if err != nil {
+			return err
+		}
+		// privKey := secp256k1.PrivKeyFromBytes(childKey.Key)
 		keypair := crypto.KeyPair{
 			PrivateKey: privKey,
 			PublicKey:  privKey.PubKey(),
@@ -107,7 +150,27 @@ func GenerateKeypairs(versionKey *bip32.Key, values []uint64, keyset *crypto.Min
 	return nil
 }
 
-func GetKeysetsFromSeeds(seeds []cashu.Seed, mintKey *bip32.Key) (map[string]crypto.MintKeyset, map[string]crypto.MintKeyset, error) {
+func GenerateKeypairs(versionKey *hdkeychain.ExtendedKey, values []uint64, keyset *crypto.MintKeyset) error {
+	for i, value := range values {
+		// uses the value it represents to derive the key
+		childKey, err := versionKey.Derive(hdkeychain.HardenedKeyStart + uint32(i))
+		if err != nil {
+			return err
+		}
+		privKey, err := childKey.ECPrivKey()
+		if err != nil {
+			return err
+		}
+		keypair := crypto.KeyPair{
+			PrivateKey: privKey,
+			PublicKey:  privKey.PubKey(),
+		}
+		keyset.Keys[value] = keypair
+	}
+	return nil
+}
+
+func GetKeysetsFromSeeds(seeds []database.Seed, mintKey *hdkeychain.ExtendedKey) (map[string]crypto.MintKeyset, map[string]crypto.MintKeyset, error) {
 	newKeysets := make(map[string]crypto.MintKeyset)
 	newActiveKeysets := make(map[string]crypto.MintKeyset)
 
