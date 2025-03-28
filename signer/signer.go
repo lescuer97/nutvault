@@ -30,6 +30,7 @@ type Signer struct {
 	keysets       map[string]crypto.MintKeyset
 	activeKeysets map[string]crypto.MintKeyset
 	db            database.SqliteDB
+	pubkey *secp256k1.PublicKey
 }
 
 func SetupLocalSigner(db database.SqliteDB) (Signer, error) {
@@ -87,6 +88,7 @@ func SetupLocalSigner(db database.SqliteDB) (Signer, error) {
 
 	signer.keysets = keysets
 	signer.activeKeysets = activeKeysets
+	signer.pubkey = privateKey.PubKey()
 
 	masterKey = nil
 	return signer, nil
@@ -365,12 +367,7 @@ func (l *Signer) validateProof(proof goNutsCashu.Proof, checkOutputs *bool, pubk
 // returns serialized compressed public key
 func (l *Signer) GetSignerPubkey() ([]byte, error) {
 
-	mintPrivateKey, err := l.getSignerPrivateKey()
-	if err != nil {
-		return []byte{}, fmt.Errorf(`l.getSignerPrivateKey() %w`, err)
-	}
-
-	return mintPrivateKey.PubKey().SerializeCompressed(), nil
+	return l.pubkey.SerializeCompressed(), nil
 }
 func verifyP2PKLockedProof(proof goNutsCashu.Proof, proofSecret nut10.WellKnownSecret) error {
 	var p2pkWitness nut11.P2PKWitness
