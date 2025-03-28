@@ -28,8 +28,8 @@ import (
 var ErrNoKeysetFound = errors.New("No keyset found")
 
 type Signer struct {
-	keysets       map[string]crypto.MintKeyset
-	activeKeysets map[string]crypto.MintKeyset
+	keysets       map[string]MintPublicKeyset
+	activeKeysets map[string]MintPublicKeyset
 	db            database.SqliteDB
 	pubkey        *secp256k1.PublicKey
 }
@@ -92,28 +92,25 @@ func SetupLocalSigner(db database.SqliteDB) (Signer, error) {
 	signer.activeKeysets = activeKeysets
 	signer.pubkey = privateKey.PubKey()
 
+	privateKey = nil
+	privateKeyFromDbus = ""
 	masterKey = nil
 	return signer, nil
 
 }
 
 func (l *Signer) GetKeysById(id string) (nut01.GetKeysResponse, error) {
-
 	val, exists := l.keysets[id]
 	if exists {
-
-		return OrderKeysetByUnit([]crypto.MintKeyset{val}), nil
-
+		return OrderKeysetByUnit([]MintPublicKeyset{val}), nil
 	}
+
 	return nut01.GetKeysResponse{}, ErrNoKeysetFound
 }
 
 func (l *Signer) GetActiveKeys() (nut01.GetKeysResponse, error) {
-
-	// l.keysets[0].
-	// DeriveKeyset()
 	// convert map to slice
-	var keys []crypto.MintKeyset
+	var keys []MintPublicKeyset
 	for _, keyset := range l.activeKeysets {
 		keys = append(keys, keyset)
 	}

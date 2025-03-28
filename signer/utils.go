@@ -11,9 +11,9 @@ import (
 	"github.com/lescuer97/nutmix/api/cashu"
 )
 
-func OrderKeysetByUnit(keysets []crypto.MintKeyset) nut01.GetKeysResponse {
+func OrderKeysetByUnit(keysets []MintPublicKeyset) nut01.GetKeysResponse {
 	// keysets[0].
-	var typesOfUnits = make(map[string][]crypto.MintKeyset)
+	var typesOfUnits = make(map[string][]MintPublicKeyset)
 
 	for _, keyset := range keysets {
 		if len(typesOfUnits[keyset.Unit]) == 0 {
@@ -34,7 +34,7 @@ func OrderKeysetByUnit(keysets []crypto.MintKeyset) nut01.GetKeysResponse {
 			keyset := nut01.Keyset{}
 			keyset.Id = mintKey.Id
 			keyset.Unit = mintKey.Unit
-			keyset.Keys = mintKey.DerivePublic()
+			keyset.Keys = mintKey.Keys
 			res.Keysets = append(res.Keysets, keyset)
 		}
 	}
@@ -170,9 +170,9 @@ func GenerateKeypairs(versionKey *hdkeychain.ExtendedKey, values []uint64, keyse
 	return nil
 }
 
-func GetKeysetsFromSeeds(seeds []database.Seed, mintKey *hdkeychain.ExtendedKey) (map[string]crypto.MintKeyset, map[string]crypto.MintKeyset, error) {
-	newKeysets := make(map[string]crypto.MintKeyset)
-	newActiveKeysets := make(map[string]crypto.MintKeyset)
+func GetKeysetsFromSeeds(seeds []database.Seed, mintKey *hdkeychain.ExtendedKey) (map[string]MintPublicKeyset, map[string]MintPublicKeyset, error) {
+	newKeysets := make(map[string]MintPublicKeyset)
+	newActiveKeysets := make(map[string]MintPublicKeyset)
 
 	for _, seed := range seeds {
 		keyset, err := DeriveKeyset(mintKey, seed)
@@ -184,11 +184,14 @@ func GetKeysetsFromSeeds(seeds []database.Seed, mintKey *hdkeychain.ExtendedKey)
 			panic("The ids should be same")
 		}
 
+		publicKeyset := MakeMintPublickeys(keyset)
+
 		if seed.Active {
-			newActiveKeysets[seed.Id] = keyset
+			newActiveKeysets[seed.Id] = publicKeyset
 		}
 
-		newKeysets[seed.Id] = keyset
+		newKeysets[seed.Id] = publicKeyset
+
 	}
 	return newKeysets, newActiveKeysets, nil
 
