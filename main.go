@@ -53,9 +53,14 @@ func main() {
 		log.Fatal("Error creating Unix socket:", err)
 	}
 
+	creds, err := GetTlsSecurityCredential()
+	if err != nil {
+		log.Fatalf("Error creating Unix socket: %+v", err)
+	}
+
 	log.Printf("Listening on unix socket: %s", abstractSocket)
 	// Create a new gRPC server
-	s := grpc.NewServer()
+	s := grpc.NewServer(grpc.Creds(creds))
 
 	// Register the service
 	sig.RegisterSignerServer(s, &routes.Server{

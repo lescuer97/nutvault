@@ -7,10 +7,6 @@ import (
 	"github.com/godbus/dbus/v5"
 )
 
-func GetDbusConnection() {
-
-}
-
 type SecretStructure struct {
 	Session     dbus.ObjectPath
 	Parameters  []byte
