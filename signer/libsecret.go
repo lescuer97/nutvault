@@ -3,6 +3,7 @@ package signer
 import (
 	"fmt"
 	"log"
+	"log/slog"
 
 	"github.com/godbus/dbus/v5"
 )
@@ -17,6 +18,7 @@ type SecretStructure struct {
 // GetNutmixSignerKey retrieves the secret key for the nutmix-remote-signer application
 // from the system's secret service (libsecret) via DBus
 func GetNutmixSignerKey(envPrivateKey string) (string, error) {
+	slog.Debug("connecting to dbus")
 	// Connect to the session bus
 	conn, err := dbus.ConnectSessionBus()
 	if err != nil {
@@ -42,6 +44,7 @@ func GetNutmixSignerKey(envPrivateKey string) (string, error) {
 		"application": "nutmix-remote-signer",
 	}
 
+	slog.Debug("Getting secret form org.freedesktop")
 	// Search for items matching our criteria
 	var resultItems []dbus.ObjectPath
 	err = collection.Call("org.freedesktop.Secret.Collection.SearchItems", 0, searchAttributes).Store(&resultItems)
@@ -66,6 +69,7 @@ func GetNutmixSignerKey(envPrivateKey string) (string, error) {
 		// Get the secret
 		var secretStruct SecretStructure
 
+		slog.Info("Getting private key from secret")
 		err = item.Call("org.freedesktop.Secret.Item.GetSecret", 0, openSession).Store(&secretStruct)
 		if err != nil {
 			return "", fmt.Errorf("failed to get secret: %v", err)
@@ -76,6 +80,7 @@ func GetNutmixSignerKey(envPrivateKey string) (string, error) {
 		return secretValue, nil
 	}
 
+	slog.Info("No secret exists for the remote signer")
 	if envPrivateKey == "" {
 		panic("private key for the mint is not set for storage")
 	}
@@ -94,6 +99,7 @@ func GetNutmixSignerKey(envPrivateKey string) (string, error) {
 		ContentType: "text/plain",
 	}
 
+	slog.Info("Adding private key to secret service")
 	// Create the new item with the secret
 	var newItem dbus.ObjectPath
 	err = collection.Call(

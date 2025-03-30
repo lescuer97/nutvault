@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"io"
 	"log"
+	"log/slog"
 	"net"
 	"nutmix_remote_signer/database"
 	sig "nutmix_remote_signer/gen"
@@ -34,6 +36,25 @@ func main() {
 		log.Panicf(`utils.GetRastaskerHomeDirectory(). %+v`, err)
 	}
 
+	logFile, err := os.OpenFile(homeDir+"logs", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0764)
+	defer logFile.Close()
+	if err != nil {
+		log.Panicf("os.OpenFile(pathToProjectLogFile, os.O_RDWR|os.O_CREATE, 0764) %+v", err)
+	}
+
+	w := io.MultiWriter(os.Stdout, logFile)
+
+	opts := &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}
+
+	if os.Getenv("DEBUG") == "true" {
+		opts.Level = slog.LevelDebug
+		opts.AddSource = true
+	}
+	logger := slog.New(slog.NewJSONHandler(w, opts))
+	slog.SetDefault(logger)
+
 	ctx := context.Background()
 	sqlite, err := database.DatabaseSetup(ctx, homeDir)
 	defer sqlite.Db.Close()
@@ -58,16 +79,15 @@ func main() {
 		log.Fatalf("Error creating Unix socket: %+v", err)
 	}
 
-	log.Printf("Listening on unix socket: %s", abstractSocket)
+	slog.Info("Listening on unix socket: %s", abstractSocket)
 	// Create a new gRPC server
 	s := grpc.NewServer(grpc.Creds(creds))
 
+	// logger.D
 	// Register the service
-	sig.RegisterSignerServer(s, &routes.Server{
+	sig.RegisterSignerServiceServer(s, &routes.Server{
 		Signer: signer,
 	})
-
-	log.Printf("Server listening on unix socket: %s", abstractSocket)
 
 	// Serve gRPC requests
 	if err := s.Serve(listener); err != nil {

@@ -95,7 +95,6 @@ message BlindSignatureDLEQ {
     bytes s = 2;
 }
 
-
 message BlindedMessages {
     repeated BlindedMessage blinded_messages = 1;
 }

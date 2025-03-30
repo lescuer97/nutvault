@@ -2,6 +2,8 @@ package signer
 
 import (
 	"fmt"
+	"log"
+	"log/slog"
 	"math"
 	"nutmix_remote_signer/database"
 
@@ -13,7 +15,6 @@ import (
 )
 
 func OrderKeysetByUnit(keysets []MintPublicKeyset) nut01.GetKeysResponse {
-	// keysets[0].
 	var typesOfUnits = make(map[string][]MintPublicKeyset)
 
 	for _, keyset := range keysets {
@@ -64,11 +65,13 @@ func DeriveKeyset(mintKey *hdkeychain.ExtendedKey, seed database.Seed) (crypto.M
 	}
 
 	if seed.Legacy {
+		slog.Info("Generating Legacy keys", slog.String("keyId", seed.Id), slog.String("amount", fmt.Sprintf("%v", amounts)))
 		err := LegacyKeyDerivation(mintKey, &keyset, seed, unit, amounts)
 		if err != nil {
 			return keyset, fmt.Errorf("LegacyKeyDerivation(mintKey,&keyset, seed, unit ) %w", err)
 		}
 	} else {
+		slog.Info("Genating keys.", slog.String("keyId", seed.Id), slog.String("amount", fmt.Sprintf("%v", amounts)))
 		err := KeyDerivation(mintKey, &keyset, seed, unit, amounts)
 		if err != nil {
 			return keyset, fmt.Errorf("KeyDerivation(mintKey,&keyset, seed, unit) %w", err)
@@ -79,6 +82,7 @@ func DeriveKeyset(mintKey *hdkeychain.ExtendedKey, seed database.Seed) (crypto.M
 	for i, val := range keyset.Keys {
 		publicKeys[i] = val.PublicKey
 	}
+
 	id := crypto.DeriveKeysetId(publicKeys)
 
 	keyset.Id = id
@@ -176,10 +180,8 @@ func GetKeysetsFromSeeds(seeds []database.Seed, mintKey *hdkeychain.ExtendedKey)
 		}
 
 		if keyset.Id != seed.Id {
-			panic("The ids should be same")
+			log.Panicf("The ids should be same. Keyset.Id: %v. Seed.Id ", keyset.Id, seed.Id)
 		}
-
-		// crypto.DeriveKeysetId(keyset.DerivePublic())
 
 		publicKeyset := MakeMintPublickeys(keyset)
 		publicKeyset.Legacy = seed.Legacy

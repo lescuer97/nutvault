@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"nutmix_remote_signer/database"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -38,6 +40,7 @@ func SetupLocalSigner(db database.SqliteDB) (Signer, error) {
 	signer := Signer{
 		db: db,
 	}
+	slog.Info("Trying to get the Mint key")
 	mint_privkey := os.Getenv("MINT_PRIVATE_KEY")
 	privateKeyFromDbus, err := GetNutmixSignerKey(mint_privkey)
 	if err != nil {
@@ -48,21 +51,26 @@ func SetupLocalSigner(db database.SqliteDB) (Signer, error) {
 	if err != nil {
 		return signer, fmt.Errorf("signer.getSignerPrivateKey(). %w", err)
 	}
+	slog.Debug("Creating master key for derivation")
 	masterKey, err := hdkeychain.NewMaster(privateKey.Serialize(), &chaincfg.MainNetParams)
 	if err != nil {
 		return signer, fmt.Errorf(" bip32.NewMasterKey(privateKey.Serialize()). %w", err)
 	}
 	defer func() {
+		slog.Debug("Cleaning up priv key variables")
 		privateKeyFromDbus = ""
 		privateKey = nil
 		masterKey = nil
 	}()
 
+	slog.Debug("Getting all the seeds from the database")
 	seeds, err := signer.db.GetAllSeeds()
 	if err != nil {
 		return signer, fmt.Errorf("signer.db.GetAllSeeds(). %w", err)
 	}
 	if len(seeds) == 0 {
+		slog.Info("There are no seeds available.")
+		slog.Info("Creating a new seed")
 		newSeed, err := signer.createNewSeed(masterKey, cashu.Sat, 1, 0)
 
 		if err != nil {
@@ -75,6 +83,7 @@ func SetupLocalSigner(db database.SqliteDB) (Signer, error) {
 		}
 		defer tx.Rollback()
 
+		slog.Info("Saving seed for to the database")
 		err = db.SaveNewSeed(tx, newSeed)
 		if err != nil {
 			return signer, fmt.Errorf("db.SaveNewSeeds([]cashu.Seed{newSeed}). %w", err)
@@ -86,11 +95,13 @@ func SetupLocalSigner(db database.SqliteDB) (Signer, error) {
 		seeds = append(seeds, newSeed)
 	}
 
+	slog.Debug("Generating keysets from seeds")
 	keysets, activeKeysets, err := GetKeysetsFromSeeds(seeds, masterKey)
 	if err != nil {
 		return signer, fmt.Errorf(`signer.GetKeysetsFromSeeds(seeds, masterKey). %w`, err)
 	}
 
+	slog.Debug("Setting keysets into the signer")
 	signer.keysets = keysets
 	signer.activeKeysets = activeKeysets
 	signer.pubkey = privateKey.PubKey()
@@ -100,8 +111,10 @@ func SetupLocalSigner(db database.SqliteDB) (Signer, error) {
 }
 
 func (l *Signer) GetKeysById(id string) (nut01.GetKeysResponse, error) {
+	slog.Debug(fmt.Sprintf("trying to get keyset %s", id))
 	val, exists := l.keysets[id]
 	if exists {
+		slog.Debug("ordering keyset by unit")
 		return OrderKeysetByUnit([]MintPublicKeyset{val}), nil
 	}
 
@@ -115,22 +128,20 @@ func (l *Signer) GetActiveKeys() (nut01.GetKeysResponse, error) {
 		keys = append(keys, keyset)
 	}
 
+	slog.Debug("ordering keyset by unit")
 	return OrderKeysetByUnit(keys), nil
 }
 
-func (l *Signer) GetKeysets() (nut02.GetKeysetsResponse, error) {
+func (l *Signer) GetKeysets() nut02.GetKeysetsResponse {
 	var response nut02.GetKeysetsResponse
-	seeds, err := l.db.GetAllSeeds()
-	if err != nil {
-		return response, fmt.Errorf(" l.db.GetAllSeeds(). %w", err)
-	}
-	for _, seed := range seeds {
+	for _, seed := range l.keysets {
 		response.Keysets = append(response.Keysets, nut02.Keyset{Id: seed.Id, Unit: seed.Unit, Active: seed.Active, InputFeePpk: seed.InputFeePpk})
 	}
-	return response, nil
+	return response
 }
 
 func (l *Signer) getSignerPrivateKey(private_key string) (*secp256k1.PrivateKey, error) {
+	slog.Debug("parsing private_key")
 	decodedPrivKey, err := hex.DecodeString(private_key)
 	if err != nil {
 		return nil, fmt.Errorf(`hex.DecodeString(mint_privkey). %w`, err)
@@ -141,6 +152,7 @@ func (l *Signer) getSignerPrivateKey(private_key string) (*secp256k1.PrivateKey,
 }
 
 func (l *Signer) createNewSeed(mintPrivateKey *hdkeychain.ExtendedKey, unit cashu.Unit, version int, fee uint) (database.Seed, error) {
+	slog.Info("Generating new seed", slog.String("unit", unit.String()), slog.String("version", strconv.FormatInt(int64(version), 10)), slog.String("fee", strconv.FormatUint(uint64(fee), 10)))
 	// rotate one level up
 	newSeed := database.Seed{
 		CreatedAt:   time.Now().Unix(),
@@ -157,6 +169,7 @@ func (l *Signer) createNewSeed(mintPrivateKey *hdkeychain.ExtendedKey, unit cash
 	}
 
 	if keyset.Id == "" {
+		slog.Error("Keyset id should already exists at this point ")
 		panic("keyset id was not generated")
 	}
 
@@ -166,6 +179,7 @@ func (l *Signer) createNewSeed(mintPrivateKey *hdkeychain.ExtendedKey, unit cash
 }
 
 func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint) error {
+	slog.Info("Rotating keyset", slog.String("unit", unit.String()), slog.String("fee", strconv.FormatUint(uint64(fee), 10)))
 	tx, err := l.db.Db.Begin()
 	if err != nil {
 		return fmt.Errorf("l.db.GetTx(ctx). %w", err)
@@ -174,6 +188,7 @@ func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint) error {
 
 	// get current highest seed version
 	var highestSeed database.Seed = database.Seed{Version: 0}
+	slog.Debug("Getting seed from unit", slog.String("unit", unit.String()))
 	seeds, err := l.db.GetSeedsByUnit(tx, unit)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -181,6 +196,7 @@ func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint) error {
 
 		}
 	}
+	slog.Debug("Finding highest current version of seed")
 	for i, seed := range seeds {
 		if highestSeed.Version < seed.Version {
 			highestSeed = seed
@@ -189,10 +205,13 @@ func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint) error {
 		seeds[i].Active = false
 	}
 
+	slog.Info(fmt.Sprintf("Current hightest seed. Version: %v. Id: %s", highestSeed.Version, highestSeed.Id))
+
 	privateKeyFromDbus, err := GetNutmixSignerKey("")
 	if err != nil {
 		return fmt.Errorf("signer.getSignerPrivateKey(). %w", err)
 	}
+
 	mintPrivateKey, err := l.getSignerPrivateKey(privateKeyFromDbus)
 	if err != nil {
 		return fmt.Errorf(`l.getSignerPrivateKey() %w`, err)
@@ -249,6 +268,7 @@ func (l *Signer) SignBlindMessages(messages goNutsCashu.BlindedMessages) (goNuts
 	indexesForGeneration := make(keysetAmounts)
 	amounts := GetAmountsForKeysets()
 
+	slog.Debug("Finding what amounts we need to create private keys for")
 	// get index of amounts to use for generation
 	for _, output := range messages {
 		_, exists := indexesForGeneration[output.Amount]
@@ -268,6 +288,7 @@ func (l *Signer) SignBlindMessages(messages goNutsCashu.BlindedMessages) (goNuts
 		return nil, err
 	}
 
+	slog.Debug("Signing blind messages")
 	for _, output := range messages {
 		correctKeyset := keysets[output.Id].Keys[output.Amount]
 
@@ -288,10 +309,6 @@ func (l *Signer) SignBlindMessages(messages goNutsCashu.BlindedMessages) (goNuts
 		}
 
 		sig := crypto.SignBlindedMessage(blindedMsg, correctKeyset.PrivateKey)
-		if err != nil {
-			err = fmt.Errorf("GenerateBlindSignature: %w %w", cashu.ErrInvalidBlindMessage, err)
-			return nil, err
-		}
 
 		E, S := crypto.GenerateDLEQ(correctKeyset.PrivateKey, blindedMsg, sig)
 
@@ -313,13 +330,10 @@ func (l *Signer) SignBlindMessages(messages goNutsCashu.BlindedMessages) (goNuts
 }
 
 func (l *Signer) VerifyProofs(proofs goNutsCashu.Proofs, blindMessages goNutsCashu.BlindedMessages) error {
-	checkOutputs := false
-
-	pubkeysFromProofs := make(map[*btcec.PublicKey]bool)
-
 	indexesForGeneration := make(keysetAmounts)
 	amounts := GetAmountsForKeysets()
 
+	slog.Debug("Finding what amounts we need to create private keys for")
 	// get index of amounts to use for generation
 	for _, proof := range proofs {
 		_, exists := indexesForGeneration[proof.Amount]
@@ -339,8 +353,9 @@ func (l *Signer) VerifyProofs(proofs goNutsCashu.Proofs, blindMessages goNutsCas
 		return err
 	}
 
+	slog.Debug("Validating proofs")
 	for _, proof := range proofs {
-		err := l.validateProof(keysets, proof, &checkOutputs, &pubkeysFromProofs)
+		err := l.validateProof(keysets, proof)
 		if err != nil {
 			return fmt.Errorf("l.validateProof(proof, unit, &checkOutputs, &pubkeysFromProofs): %w", err)
 		}
@@ -349,7 +364,7 @@ func (l *Signer) VerifyProofs(proofs goNutsCashu.Proofs, blindMessages goNutsCas
 	return nil
 }
 
-func (l *Signer) validateProof(keysets map[string]crypto.MintKeyset, proof goNutsCashu.Proof, checkOutputs *bool, pubkeysFromProofs *map[*btcec.PublicKey]bool) error {
+func (l *Signer) validateProof(keysets map[string]crypto.MintKeyset, proof goNutsCashu.Proof) error {
 	keyset, exists := keysets[proof.Id]
 	if !exists {
 		return cashu.ErrKeysetForProofNotFound
@@ -376,11 +391,14 @@ func (l *Signer) validateProof(keysets map[string]crypto.MintKeyset, proof goNut
 
 	nut10Secret, err := nut10.DeserializeSecret(proof.Secret)
 	if err == nil {
+		slog.Debug("Checking if the proof is locked")
 		if nut10Secret.Kind == nut10.P2PK {
+			slog.Debug("Proof locked to P2PK")
 			if err := verifyP2PKLockedProof(proof, nut10Secret); err != nil {
 				return fmt.Errorf("verifyP2PKLockedProof(proof, nut10Secret); err != nil : %w %w", cashu.ErrInvalidProof, err)
 			}
 		} else if nut10Secret.Kind == nut10.HTLC {
+			slog.Debug("Proof locked to HTLC")
 			if err := verifyHTLCProof(proof, nut10Secret); err != nil {
 				return fmt.Errorf("verifyP2PKLockedProof(proof, nut10Secret); err != nil ; err != nil : %w %w", cashu.ErrInvalidProof, err)
 			}
