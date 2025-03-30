@@ -3,26 +3,51 @@ syntax = "proto3";
 package proto_signer;
 option go_package = "nutmix_remote_signer/proto_signer";
 
-service Signer {
+service SignerService {
   rpc BlindSign (BlindedMessages) returns (BlindSignatures);
-  rpc VerifyProofs (Proofs) returns (Success);
+  rpc VerifyProofs (Proofs) returns (BooleanResponse);
   rpc ActiveKeys (EmptyRequest) returns (KeysResponse);
   rpc KeysById (Id) returns (KeysResponse);
   rpc Keysets (EmptyRequest) returns (KeysetResponse);
-  rpc Pubkey (EmptyRequest) returns (PublicKey);
-  rpc RotateKeyset (RotationRequest) returns (Success);
+  rpc RotateKeyset (RotationRequest) returns (BooleanResponse);
+  rpc Config (EmptyRequest) returns (ConfigResponse);
 }
-message EmptyRequest {}
 
-message Success {
-    bool success  = 1;
+enum ErrorCode {
+    UNKNOWN = 0;
+    AMOUNT_OUTSIDE_LIMIT = 1;
+    DUPLICATE_INPUTS_PROVIDED = 2;
+    DUPLICATE_OUTPUTS_PROVIDED = 3;
+    KEYSET_NOT_KNOWN = 4;
+    KEYSET_INACTIVE = 5;
+    MINTING_DISABLED = 6;
+    COULD_NOT_ROTATE_KEYSET = 7;
+    INVALID_PROOF = 8;
+    INVALID_BLIND_MESSAGE = 9;
+    UNIT_NOT_SUPPORTED = 10;
 }
+
+message Error {
+  ErrorCode code = 1;
+  string detail = 2;
+}
+
+
+message BooleanResponse {
+    oneof result {
+        bool success  = 1;
+        Error error = 2;
+    }
+}
+
 message RotationRequest {
     string unit  = 1;
     uint32 fee  = 2;
 }
-message PublicKey {
+
+message ConfigResponse {
     bytes pubkey  = 1;
+    uint64 signing_limits  = 2;
 }
 
 message Id {
@@ -32,6 +57,7 @@ message Id {
 message Proofs {
     repeated Proof proof = 1;
 }
+
 message Proof {
     uint64 amount = 1;
     string keyset_id = 2;
@@ -46,9 +72,17 @@ message ProofDLEQ {
     bytes r = 3;
 }
 
+
+message SigningResponse {
+    oneof result {
+        BlindSignatures blind_signatures = 1;
+        Error error = 2;
+    }
+}
 message BlindSignatures {
     repeated BlindSignature blind_signatures = 1;
 }
+
 message BlindSignature {
     uint64 amount = 1;
     string keyset_id = 2;
@@ -65,6 +99,7 @@ message BlindSignatureDLEQ {
 message BlindedMessages {
     repeated BlindedMessage blinded_messages = 1;
 }
+
 // Represents a blinded message
 message BlindedMessage {
     uint64 amount = 1;
@@ -96,11 +131,25 @@ message HTLCWitness {
 }
 
 message KeysResponse {
-  repeated Keys keysets = 1;
+    oneof result {
+     KeysList keysets = 1;
+     Error error = 2;
+    }
+}
+
+message KeysList {
+    repeated Keys keysets = 1;
 }
 
 message KeysetResponse {
-  repeated Keyset keysets = 1;
+    oneof result {
+        Keyset keysets = 1;
+        Error error = 2;
+    }
+}
+
+message KeySetList {
+    repeated Keyset keysets = 1;
 }
 
 message Keys {
@@ -117,3 +166,4 @@ message Keyset {
   uint32 input_fee_ppk = 4;
 }
 
+message EmptyRequest {}
