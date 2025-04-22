@@ -79,7 +79,7 @@ func main() {
 		log.Fatalf("Error creating Unix socket: %+v", err)
 	}
 
-	slog.Info("Listening on unix socket: %s", abstractSocket)
+	slog.Info("Listening on unix socket", slog.String("port", abstractSocket))
 	// Create a new gRPC server
 	s := grpc.NewServer(grpc.Creds(creds))
 

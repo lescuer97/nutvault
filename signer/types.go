@@ -16,21 +16,30 @@ type MintPublicKeyset struct {
 	Unit              string
 	Active            bool
 	DerivationPathIdx uint32
-	Keys              map[uint64]string
+	Keys              map[uint64][]byte
 	InputFeePpk       uint
 	Legacy            bool
 }
 
 func MakeMintPublickeys(mintKey crypto.MintKeyset) MintPublicKeyset {
-
-	return MintPublicKeyset{
+	result := MintPublicKeyset{
 		Id:                mintKey.Id,
 		Unit:              mintKey.Unit,
 		Active:            mintKey.Active,
 		DerivationPathIdx: mintKey.DerivationPathIdx,
-		Keys:              mintKey.DerivePublic(),
+		Keys:              make(map[uint64][]byte, len(mintKey.Keys)),
 		InputFeePpk:       uint(mintKey.DerivationPathIdx),
 	}
+
+	for key, keypair := range mintKey.Keys {
+		result.Keys[key] = keypair.PublicKey.SerializeCompressed()
+	}
+
+	if len(mintKey.Keys) != len(result.Keys) {
+		log.Panicf("Result Keys and mintKey.Keys should be of the same length")
+	}
+
+	return result
 }
 
 func (s *Signer) GenerateMintKeysFromPublicKeysets(amounts keysetAmounts) (map[string]crypto.MintKeyset, error) {

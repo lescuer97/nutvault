@@ -9,40 +9,10 @@ import (
 
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/elnosh/gonuts/cashu/nuts/nut01"
 	"github.com/elnosh/gonuts/crypto"
 	"github.com/lescuer97/nutmix/api/cashu"
 )
 
-func OrderKeysetByUnit(keysets []MintPublicKeyset) nut01.GetKeysResponse {
-	var typesOfUnits = make(map[string][]MintPublicKeyset)
-
-	for _, keyset := range keysets {
-		if len(typesOfUnits[keyset.Unit]) == 0 {
-			typesOfUnits[keyset.Unit] = append(typesOfUnits[keyset.Unit], keyset)
-			continue
-		} else {
-			typesOfUnits[keyset.Unit] = append(typesOfUnits[keyset.Unit], keyset)
-		}
-	}
-
-	res := nut01.GetKeysResponse{}
-
-	res.Keysets = []nut01.Keyset{}
-
-	for _, unitKeysets := range typesOfUnits {
-		for _, mintKey := range unitKeysets {
-
-			keyset := nut01.Keyset{}
-			keyset.Id = mintKey.Id
-			keyset.Unit = mintKey.Unit
-			keyset.Keys = mintKey.Keys
-			res.Keysets = append(res.Keysets, keyset)
-		}
-	}
-	return res
-
-}
 func DeriveKeyset(mintKey *hdkeychain.ExtendedKey, seed database.Seed) (crypto.MintKeyset, error) {
 	keyset := crypto.MintKeyset{
 		Unit:              seed.Unit,

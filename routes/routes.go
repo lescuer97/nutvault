@@ -20,7 +20,7 @@ type Server struct {
 	sig.SignerServiceServer
 }
 
-func (s *Server) BlindSign(ctx context.Context, message *sig.BlindedMessages) (*sig.BlindSignatures, error) {
+func (s *Server) BlindSign(ctx context.Context, message *sig.BlindedMessages) (*sig.BlindSignResponse, error) {
 	slog.Info("Receive requequest for Blind signing")
 
 	blindMessages := goNutsCashu.BlindedMessages{}
@@ -30,13 +30,18 @@ func (s *Server) BlindSign(ctx context.Context, message *sig.BlindedMessages) (*
 
 	blindSigs, err := s.Signer.SignBlindMessages(blindMessages)
 
-	blindSigsResponse := sig.BlindSignatures{}
+	blindSigsResponse := sig.BlindSignResponse{}
 	if err != nil {
 		slog.Error(err.Error())
 		return &blindSigsResponse, fmt.Errorf("s.signer.GetActiveKeys(). %w", err)
 	}
 
-	blindSigsResponse.BlindSignatures = []*sig.BlindSignature{}
+	blindSignatures := sig.BlindSignatures{
+		BlindSignatures: []*sig.BlindSignature{},
+	}
+	blindSigsResult := sig.BlindSignResponse_Sigs{
+		Sigs: &blindSignatures,
+	}
 	for _, val := range blindSigs {
 		blindSec, err := hex.DecodeString(val.C_)
 		if err != nil {
@@ -60,9 +65,11 @@ func (s *Server) BlindSign(ctx context.Context, message *sig.BlindedMessages) (*
 			S: SBytes,
 		}
 
-		blindSigsResponse.BlindSignatures = append(blindSigsResponse.BlindSignatures, &sig.BlindSignature{Amount: val.Amount, KeysetId: val.Id, BlindedSecret: blindSec, Dleq: &dleq})
+		blindSigsResult.Sigs.BlindSignatures = append(blindSigsResult.Sigs.BlindSignatures, &sig.BlindSignature{Amount: val.Amount, KeysetId: val.Id, BlindedSecret: blindSec, Dleq: &dleq})
 
 	}
+
+	blindSigsResponse.Result = &blindSigsResult
 	return &blindSigsResponse, nil
 }
 
@@ -120,72 +127,30 @@ func (s *Server) VerifyProofs(ctx context.Context, proofs *sig.Proofs) (*sig.Boo
 	return &boolResponse, nil
 }
 
-func (s *Server) ActiveKeys(ctx context.Context, _ *sig.EmptyRequest) (*sig.KeysResponse, error) {
-	slog.Info("Received active keys request")
-	keys, err := s.Signer.GetActiveKeys()
-	if err != nil {
-		return nil, fmt.Errorf("s.signer.GetActiveKeys(). %w", err)
-	}
+func (s *Server) Keysets(ctx context.Context, _ *sig.EmptyRequest) (*sig.KeysResponse, error) {
+	slog.Debug("Received request to all keysets")
 
-	slog.Debug("Sorting keys to grpc types")
-	return ConvertKeysToSig(keys), nil
+	keys := s.Signer.GetKeysets()
+	pubkey := s.Signer.GetSignerPubkey()
+
+	keysResponse := ConvertToKeysResponse(pubkey, keys)
+	return keysResponse, nil
 }
 
-func (s *Server) KeysById(ctx context.Context, id *sig.Id) (*sig.KeysResponse, error) {
-	slog.Info("Received keys request by id")
-	key, err := s.Signer.GetKeysById(id.GetId())
-
-	if err != nil {
-		return nil, fmt.Errorf("s.signer.GetKeysById(id.GetId()). %w", err)
-	}
-
-	slog.Debug("Sorting keys to grpc types")
-	return ConvertKeysToSig(key), nil
-}
-
-func (s *Server) Keysets(ctx context.Context, _ *sig.EmptyRequest) (*sig.KeysetResponse, error) {
-	slog.Info("Received request to all keysets")
-
-	keys, err := s.Signer.GetKeysets()
-	if err != nil {
-		slog.Error("Problem getting the keysets", slog.String("extra", err.Error()))
-		return nil, fmt.Errorf("s.signer.GetKeys(). %w", err)
-	}
-
-	slog.Debug("Sorting keys to grpc types")
-	return ConvertKeyssetToSig(keys), nil
-}
-
-func (s *Server) Config(ctx context.Context, _ *sig.EmptyRequest) (*sig.ConfigResponse, error) {
-	slog.Info("Received configuration setting request")
-
-	pubkey, err := s.Signer.GetSignerPubkey()
-	if err != nil {
-		slog.Error("Problem getting the cofigurations", slog.String("extra", err.Error()))
-		return nil, fmt.Errorf("s.signer.GetSignerPubkey(). %w", err)
-	}
-
-	slog.Debug("Sorting keys to grpc types")
-	return ConvertPubkeyToSig(pubkey), nil
-}
-
-func (s *Server) RotateKeyset(ctx context.Context, req *sig.RotationRequest) (*sig.Success, error) {
+func (s *Server) RotateKeyset(ctx context.Context, req *sig.RotationRequest) (*sig.KeyRotationResponse, error) {
 	slog.Info("Received key rotation request")
 
-	unit, err := cashu.UnitFromString(req.GetUnit())
+	rotationReq, err := ConvertSigRotationRequest(req)
 	if err != nil {
-		return nil, fmt.Errorf("s.signer.GetSignerPubkey(). %w", err)
+		slog.Error("Could not convert the rotation request", slog.String("extra", err.Error()))
+		return nil, fmt.Errorf("s.Signer.RotateKeyset(). %w", err)
 	}
 
-	err = s.Signer.RotateKeyset(unit, uint(req.GetFee()))
-
-	success := sig.Success{}
+	newKey, err := s.Signer.RotateKeyset(rotationReq.Unit, rotationReq.Fee, rotationReq.MaxOrder)
 	if err != nil {
-		slog.Error("Could not detect rotate keysets", slog.String("extra", err.Error()))
-		success.Success = false
-		return &success, fmt.Errorf("s.Signer.RotateKeyset(). %w", err)
+		slog.Error("Could not rotate keysets", slog.String("extra", err.Error()))
+		return nil, fmt.Errorf("s.Signer.RotateKeyset(). %w", err)
 	}
-
-	success.Success = true
-	return &success, nil
+	rotationResponse := ConvertToKeyRotationResponse(newKey)
+	return rotationResponse, nil
 }

@@ -2,54 +2,108 @@ package routes
 
 import (
 	"errors"
+	"fmt"
 	sig "nutmix_remote_signer/gen"
-	"strconv"
+	"nutmix_remote_signer/signer"
+	"strings"
 
-	"github.com/elnosh/gonuts/cashu/nuts/nut01"
-	"github.com/elnosh/gonuts/cashu/nuts/nut02"
 	"github.com/lescuer97/nutmix/api/cashu"
 )
 
-func ConvertKeysToSig(keys nut01.GetKeysResponse) *sig.KeysList {
-	sigs := sig.KeysList{
-		Keysets: make([]*sig.Keys, len(keys.Keysets)),
+func ConvertUnitToSigUnit(unit string) *sig.CurrencyUnit {
+
+	currUnit := sig.CurrencyUnit{}
+
+	switch strings.ToLower(unit) {
+	case "sat":
+		currUnit.CurrencyUnit = &sig.CurrencyUnit_Unit{Unit: sig.CurrencyUnitType_SAT}
+	case "msat":
+		currUnit.CurrencyUnit = &sig.CurrencyUnit_Unit{Unit: sig.CurrencyUnitType_MSAT}
+	case "usd":
+		currUnit.CurrencyUnit = &sig.CurrencyUnit_Unit{Unit: sig.CurrencyUnitType_USD}
+	case "eur":
+		currUnit.CurrencyUnit = &sig.CurrencyUnit_Unit{Unit: sig.CurrencyUnitType_EUR}
+	case "auth":
+		currUnit.CurrencyUnit = &sig.CurrencyUnit_Unit{Unit: sig.CurrencyUnitType_AUTH}
+	default:
+		currUnit.CurrencyUnit = &sig.CurrencyUnit_CustomUnit{CustomUnit: strings.ToLower(unit)}
 	}
 
-	for i, val := range keys.Keysets {
+	return &currUnit
+}
 
-		keyMap := make(map[string]string)
+func ConvertToKeysResponse(pubkey []byte, keys []signer.MintPublicKeyset) *sig.KeysResponse {
+	response := sig.KeysResponse{}
 
-		for val, key := range val.Keys {
-			keyMap[strconv.FormatUint(val, 10)] = key
+	responseResult := sig.KeysResponse_Keysets{
+		Keysets: &sig.SignatoryKeysets{
+			Keysets: make([]*sig.KeySet, len(keys)),
+		},
+	}
+	responseResult.Keysets.Pubkey = pubkey
+	for i, mintPubKey := range keys {
+		keys := sig.Keys{
+			Keys: mintPubKey.Keys,
 		}
+		currUnit := ConvertUnitToSigUnit(mintPubKey.Unit)
+		keyset := sig.KeySet{
+			Id:          mintPubKey.Id,
+			Unit:        currUnit,
+			Active:      mintPubKey.Active,
+			InputFeePpk: uint64(mintPubKey.InputFeePpk),
+			Keys:        &keys,
+		}
+		responseResult.Keysets.Keysets[i] = &keyset
+	}
+	return &response
+}
+func ConvertToKeyRotationResponse(key signer.MintPublicKeyset) *sig.KeyRotationResponse {
+	response := sig.KeyRotationResponse{}
 
-		sigs.Keysets[i] = &sig.Keys{Id: val.Id, Unit: val.Unit, Keys: keyMap}
+	keys := sig.Keys{
+		Keys: key.Keys,
+	}
+	currUnit := ConvertUnitToSigUnit(key.Unit)
+	keyset := sig.KeySet{
+		Id:          key.Id,
+		Unit:        currUnit,
+		Active:      key.Active,
+		InputFeePpk: uint64(key.InputFeePpk),
+		Keys:        &keys,
+	}
+	responseResult := sig.KeyRotationResponse_Keyset{
+		Keyset: &keyset,
 	}
 
-	return &sigs
+	response.Result = &responseResult
+	return &response
 }
 
-func ConvertKeyssetToSig(keys nut02.GetKeysetsResponse) *sig.KeySetList {
-	sigs := sig.KeySetList{
-		Keysets: make([]*sig.Keyset, len(keys.Keysets)),
-	}
-
-	for i, val := range keys.Keysets {
-		sigs.Keysets[i] = &sig.Keyset{Id: val.Id, Unit: val.Unit, Active: val.Active, InputFeePpk: uint32(val.InputFeePpk)}
-	}
-
-	return &sigs
+type RotationRequest struct {
+	Fee      uint64
+	Unit     cashu.Unit
+	MaxOrder uint64
 }
-func ConvertValuesToConfig(pubkey []byte, mintLimit uint64) *sig.ConfigResponse {
-	sigs := sig.ConfigResponse{
-		Pubkey:        make([]byte, len(pubkey)),
-		SigningLimits: mintLimit,
+
+func ConvertSigRotationRequest(req *sig.RotationRequest) (RotationRequest, error) {
+	rotationRequest := RotationRequest{}
+
+	if req == nil {
+		return rotationRequest, fmt.Errorf("No rotation request available")
+	}
+	rotationRequest.Fee = req.InputFeePpk
+	rotationRequest.MaxOrder = req.MaxOrder
+	unit, err := cashu.UnitFromString(strings.ToLower(req.Unit.String()))
+
+	if req == nil {
+		return rotationRequest, fmt.Errorf("cashu.UnitFromString(strings.ToLower(req.Unit.String())). %w", err)
 	}
 
-	copy(sigs.Pubkey, pubkey)
-
-	return &sigs
+	rotationRequest.Unit = unit
+	return rotationRequest, nil
 }
+
+
 func ConvertErrorToResponse(err error) *sig.Error {
 	error := sig.Error{}
 

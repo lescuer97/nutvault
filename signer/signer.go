@@ -17,8 +17,6 @@ import (
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	goNutsCashu "github.com/elnosh/gonuts/cashu"
-	"github.com/elnosh/gonuts/cashu/nuts/nut01"
-	"github.com/elnosh/gonuts/cashu/nuts/nut02"
 	"github.com/elnosh/gonuts/cashu/nuts/nut10"
 	"github.com/elnosh/gonuts/cashu/nuts/nut11"
 	"github.com/elnosh/gonuts/cashu/nuts/nut14"
@@ -107,36 +105,14 @@ func SetupLocalSigner(db database.SqliteDB) (Signer, error) {
 	signer.pubkey = privateKey.PubKey()
 
 	return signer, nil
-
 }
 
-func (l *Signer) GetKeysById(id string) (nut01.GetKeysResponse, error) {
-	slog.Debug(fmt.Sprintf("trying to get keyset %s", id))
-	val, exists := l.keysets[id]
-	if exists {
-		slog.Debug("ordering keyset by unit")
-		return OrderKeysetByUnit([]MintPublicKeyset{val}), nil
+func (l *Signer) GetKeysets() []MintPublicKeyset {
+	response := make([]MintPublicKeyset, len(l.keysets))
+	for _, mintkey := range l.keysets {
+		response = append(response, mintkey)
 	}
 
-	return nut01.GetKeysResponse{}, ErrNoKeysetFound
-}
-
-func (l *Signer) GetActiveKeys() (nut01.GetKeysResponse, error) {
-	// convert map to slice
-	var keys []MintPublicKeyset
-	for _, keyset := range l.activeKeysets {
-		keys = append(keys, keyset)
-	}
-
-	slog.Debug("ordering keyset by unit")
-	return OrderKeysetByUnit(keys), nil
-}
-
-func (l *Signer) GetKeysets() nut02.GetKeysetsResponse {
-	var response nut02.GetKeysetsResponse
-	for _, seed := range l.keysets {
-		response.Keysets = append(response.Keysets, nut02.Keyset{Id: seed.Id, Unit: seed.Unit, Active: seed.Active, InputFeePpk: seed.InputFeePpk})
-	}
 	return response
 }
 
@@ -178,11 +154,13 @@ func (l *Signer) createNewSeed(mintPrivateKey *hdkeychain.ExtendedKey, unit cash
 
 }
 
-func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint) error {
+func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint64, max_order uint64) (MintPublicKeyset, error) {
 	slog.Info("Rotating keyset", slog.String("unit", unit.String()), slog.String("fee", strconv.FormatUint(uint64(fee), 10)))
+
+	newKey := MintPublicKeyset{}
 	tx, err := l.db.Db.Begin()
 	if err != nil {
-		return fmt.Errorf("l.db.GetTx(ctx). %w", err)
+		return newKey, fmt.Errorf("l.db.GetTx(ctx). %w", err)
 	}
 	defer tx.Rollback()
 
@@ -192,7 +170,7 @@ func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint) error {
 	seeds, err := l.db.GetSeedsByUnit(tx, unit)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return fmt.Errorf("database.GetSeedsByUnit(tx, unit). %w", err)
+			return newKey, fmt.Errorf("database.GetSeedsByUnit(tx, unit). %w", err)
 
 		}
 	}
@@ -209,37 +187,37 @@ func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint) error {
 
 	privateKeyFromDbus, err := GetNutmixSignerKey("")
 	if err != nil {
-		return fmt.Errorf("signer.getSignerPrivateKey(). %w", err)
+		return newKey, fmt.Errorf("signer.getSignerPrivateKey(). %w", err)
 	}
 
 	mintPrivateKey, err := l.getSignerPrivateKey(privateKeyFromDbus)
 	if err != nil {
-		return fmt.Errorf(`l.getSignerPrivateKey() %w`, err)
+		return newKey, fmt.Errorf(`l.getSignerPrivateKey() %w`, err)
 	}
 
 	signerMasterKey, err := hdkeychain.NewMaster(mintPrivateKey.Serialize(), &chaincfg.MainNetParams)
 	if err != nil {
-		return fmt.Errorf(" hdkeychain.NewMaster(mintPrivateKey.Serialize()). %w", err)
+		return newKey, fmt.Errorf(" hdkeychain.NewMaster(mintPrivateKey.Serialize()). %w", err)
 	}
 
 	// Create New seed with one higher version
-	newSeed, err := l.createNewSeed(signerMasterKey, unit, highestSeed.Version+1, fee)
+	newSeed, err := l.createNewSeed(signerMasterKey, unit, highestSeed.Version+1, uint(fee))
 
 	if err != nil {
-		return fmt.Errorf(`l.createNewSeed(signerMasterKey, unit, highestSeed.Version+1, fee) %w`, err)
+		return newKey, fmt.Errorf(`l.createNewSeed(signerMasterKey, unit, highestSeed.Version+1, fee) %w`, err)
 	}
 
 	// add new key to db
 	err = l.db.SaveNewSeed(tx, newSeed)
 	if err != nil {
-		return fmt.Errorf(`l.db.SaveNewSeed(tx, newSeed). %w`, err)
+		return newKey, fmt.Errorf(`l.db.SaveNewSeed(tx, newSeed). %w`, err)
 	}
 
 	// only need to update if there are any previous seeds
 	if len(seeds) > 0 {
 		err = l.db.UpdateSeedsActiveStatus(tx, seeds)
 		if err != nil {
-			return fmt.Errorf(`l.db.UpdateSeedsActiveStatus(tx, seeds). %w`, err)
+			return newKey, fmt.Errorf(`l.db.UpdateSeedsActiveStatus(tx, seeds). %w`, err)
 		}
 	}
 
@@ -247,19 +225,19 @@ func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint) error {
 
 	keysets, activeKeysets, err := GetKeysetsFromSeeds(seeds, signerMasterKey)
 	if err != nil {
-		return fmt.Errorf(`m.DeriveKeysetFromSeeds(seeds, parsedPrivateKey). %w`, err)
+		return newKey, fmt.Errorf(`m.DeriveKeysetFromSeeds(seeds, parsedPrivateKey). %w`, err)
 	}
 
 	err = tx.Commit()
 	if err != nil {
-		return fmt.Errorf(`tx.Commit(). %w`, err)
+		return newKey, fmt.Errorf(`tx.Commit(). %w`, err)
 	}
 
 	l.keysets = keysets
 	l.activeKeysets = activeKeysets
 
 	signerMasterKey = nil
-	return nil
+	return l.keysets[newSeed.Id], nil
 }
 
 func (l *Signer) SignBlindMessages(messages goNutsCashu.BlindedMessages) (goNutsCashu.BlindedSignatures, error) {
@@ -409,8 +387,8 @@ func (l *Signer) validateProof(keysets map[string]crypto.MintKeyset, proof goNut
 }
 
 // returns serialized compressed public key
-func (l *Signer) GetSignerPubkey() ([]byte, error) {
-	return l.pubkey.SerializeCompressed(), nil
+func (l *Signer) GetSignerPubkey() []byte {
+	return l.pubkey.SerializeCompressed()
 }
 
 func verifyP2PKLockedProof(proof goNutsCashu.Proof, proofSecret nut10.WellKnownSecret) error {
