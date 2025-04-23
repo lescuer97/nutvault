@@ -108,7 +108,7 @@ func SetupLocalSigner(db database.SqliteDB) (Signer, error) {
 }
 
 func (l *Signer) GetKeysets() []MintPublicKeyset {
-	response := make([]MintPublicKeyset, len(l.keysets))
+	response := []MintPublicKeyset{}
 	for _, mintkey := range l.keysets {
 		response = append(response, mintkey)
 	}

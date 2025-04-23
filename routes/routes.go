@@ -132,8 +132,8 @@ func (s *Server) Keysets(ctx context.Context, _ *sig.EmptyRequest) (*sig.KeysRes
 
 	keys := s.Signer.GetKeysets()
 	pubkey := s.Signer.GetSignerPubkey()
-
 	keysResponse := ConvertToKeysResponse(pubkey, keys)
+
 	return keysResponse, nil
 }
 

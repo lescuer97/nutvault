@@ -28,7 +28,7 @@ func MakeMintPublickeys(mintKey crypto.MintKeyset) MintPublicKeyset {
 		Active:            mintKey.Active,
 		DerivationPathIdx: mintKey.DerivationPathIdx,
 		Keys:              make(map[uint64][]byte, len(mintKey.Keys)),
-		InputFeePpk:       uint(mintKey.DerivationPathIdx),
+		InputFeePpk:       uint(mintKey.InputFeePpk),
 	}
 
 	for key, keypair := range mintKey.Keys {

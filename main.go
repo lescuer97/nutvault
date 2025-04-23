@@ -83,7 +83,6 @@ func main() {
 	// Create a new gRPC server
 	s := grpc.NewServer(grpc.Creds(creds))
 
-	// logger.D
 	// Register the service
 	sig.RegisterSignerServiceServer(s, &routes.Server{
 		Signer: signer,

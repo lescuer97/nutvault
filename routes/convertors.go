@@ -55,6 +55,8 @@ func ConvertToKeysResponse(pubkey []byte, keys []signer.MintPublicKeyset) *sig.K
 		}
 		responseResult.Keysets.Keysets[i] = &keyset
 	}
+
+	response.Result = &responseResult
 	return &response
 }
 func ConvertToKeyRotationResponse(key signer.MintPublicKeyset) *sig.KeyRotationResponse {
@@ -93,16 +95,41 @@ func ConvertSigRotationRequest(req *sig.RotationRequest) (RotationRequest, error
 	}
 	rotationRequest.Fee = req.InputFeePpk
 	rotationRequest.MaxOrder = req.MaxOrder
-	unit, err := cashu.UnitFromString(strings.ToLower(req.Unit.String()))
 
-	if req == nil {
-		return rotationRequest, fmt.Errorf("cashu.UnitFromString(strings.ToLower(req.Unit.String())). %w", err)
+	unit, err := ConvertSigUnitToCashuUnit(req.Unit)
+	if err != nil {
+		return rotationRequest, fmt.Errorf("ConvertSigUnitToCashuUnit(req.Unit). %w", err)
+
 	}
-
 	rotationRequest.Unit = unit
+
 	return rotationRequest, nil
 }
 
+func ConvertSigUnitToCashuUnit(sigUnit *sig.CurrencyUnit) (cashu.Unit, error) {
+	switch sigUnit.GetUnit().Number() {
+	case sig.CurrencyUnitType_SAT.Enum().Number():
+		return cashu.Sat, nil
+	case sig.CurrencyUnitType_MSAT.Enum().Number():
+		return cashu.Msat, nil
+	case sig.CurrencyUnitType_EUR.Enum().Number():
+		return cashu.EUR, nil
+	case sig.CurrencyUnitType_USD.Enum().Number():
+		return cashu.USD, nil
+	case sig.CurrencyUnitType_AUTH.Enum().Number():
+		return cashu.AUTH, nil
+
+	default:
+		unit, err := cashu.UnitFromString(strings.ToLower(sigUnit.GetCustomUnit()))
+
+		if err != nil {
+			return cashu.Sat, fmt.Errorf("cashu.UnitFromString(strings.ToLower(req.Unit.String())). %w", err)
+		}
+		return unit, nil
+
+	}
+
+}
 
 func ConvertErrorToResponse(err error) *sig.Error {
 	error := sig.Error{}
