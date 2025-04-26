@@ -20,8 +20,10 @@ type Server struct {
 	sig.SignerServiceServer
 }
 
+
+
 func (s *Server) BlindSign(ctx context.Context, message *sig.BlindedMessages) (*sig.BlindSignResponse, error) {
-	slog.Info("Receive requequest for Blind signing")
+	slog.Info("Receive request for Blind signing")
 
 	blindMessages := goNutsCashu.BlindedMessages{}
 	for _, val := range message.BlindedMessages {
@@ -33,7 +35,13 @@ func (s *Server) BlindSign(ctx context.Context, message *sig.BlindedMessages) (*
 	blindSigsResponse := sig.BlindSignResponse{}
 	if err != nil {
 		slog.Error(err.Error())
-		return &blindSigsResponse, fmt.Errorf("s.signer.GetActiveKeys(). %w", err)
+		if mappedErr := ConvertErrorToResponse(err); mappedErr != nil {
+			blindSigsResponse.Result = &sig.BlindSignResponse_Error{
+				Error: mappedErr,
+			}
+			return &blindSigsResponse, nil
+		}
+		return &blindSigsResponse, fmt.Errorf("s.signer.SignBlindMessages(). %w", err)
 	}
 
 	blindSignatures := sig.BlindSignatures{
@@ -46,18 +54,36 @@ func (s *Server) BlindSign(ctx context.Context, message *sig.BlindedMessages) (*
 		blindSec, err := hex.DecodeString(val.C_)
 		if err != nil {
 			slog.Error("Could not decode blindSignature ", slog.String("extra", err.Error()))
+			if mappedErr := ConvertErrorToResponse(err); mappedErr != nil {
+				blindSigsResponse.Result = &sig.BlindSignResponse_Error{
+					Error: mappedErr,
+				}
+				return &blindSigsResponse, nil
+			}
 			return &blindSigsResponse, fmt.Errorf("hex.DecodeString(val.C_). %w", err)
 		}
 		slog.Debug("Trying to decode dleq from signer")
 		EBytes, err := hex.DecodeString(val.DLEQ.E)
 		if err != nil {
-			err = fmt.Errorf("hex.DecodeString(val.DLEQ.E)): %w %w", cashu.ErrInvalidBlindMessage, err)
+			mappedErr := ConvertErrorToResponse(fmt.Errorf("hex.DecodeString(val.DLEQ.E)): %w %w", cashu.ErrInvalidBlindMessage, err))
+			if mappedErr != nil {
+				blindSigsResponse.Result = &sig.BlindSignResponse_Error{
+					Error: mappedErr,
+				}
+				return &blindSigsResponse, nil
+			}
 			return nil, err
 		}
 
 		SBytes, err := hex.DecodeString(val.DLEQ.S)
 		if err != nil {
-			err = fmt.Errorf("hex.DecodeString(val.DLEQ.S)): %w %w", cashu.ErrInvalidBlindMessage, err)
+			mappedErr := ConvertErrorToResponse(fmt.Errorf("hex.DecodeString(val.DLEQ.S)): %w %w", cashu.ErrInvalidBlindMessage, err))
+			if mappedErr != nil {
+				blindSigsResponse.Result = &sig.BlindSignResponse_Error{
+					Error: mappedErr,
+				}
+				return &blindSigsResponse, nil
+			}
 			return nil, err
 		}
 		dleq := sig.BlindSignatureDLEQ{
@@ -66,7 +92,6 @@ func (s *Server) BlindSign(ctx context.Context, message *sig.BlindedMessages) (*
 		}
 
 		blindSigsResult.Sigs.BlindSignatures = append(blindSigsResult.Sigs.BlindSignatures, &sig.BlindSignature{Amount: val.Amount, KeysetId: val.Id, BlindedSecret: blindSec, Dleq: &dleq})
-
 	}
 
 	blindSigsResponse.Result = &blindSigsResult
@@ -89,7 +114,14 @@ func (s *Server) VerifyProofs(ctx context.Context, proofs *sig.Proofs) (*sig.Boo
 			witnessBytes, err := json.Marshal(wit)
 			if err != nil {
 				slog.Error("could not marshall p2pk witness", slog.String("extra", err.Error()))
-				return nil, fmt.Errorf("s.Signer.VerifyProofs(cashuProofs, []cashu.BlindedMessage{}). %w", err)
+				if mappedErr := ConvertErrorToResponse(err); mappedErr != nil {
+					boolResponse := sig.BooleanResponse{}
+					boolResponse.Result = &sig.BooleanResponse_Error{
+						Error: mappedErr,
+					}
+					return &boolResponse, nil
+				}
+				return nil, fmt.Errorf("json.Marshal(wit). %w", err)
 			}
 			witness = string(witnessBytes)
 		} else if htlcWitness != nil {
@@ -100,7 +132,14 @@ func (s *Server) VerifyProofs(ctx context.Context, proofs *sig.Proofs) (*sig.Boo
 			witnessBytes, err := json.Marshal(wit)
 			if err != nil {
 				slog.Error(err.Error())
-				return nil, fmt.Errorf("s.Signer.VerifyProofs(cashuProofs, []cashu.BlindedMessage{}). %w", err)
+				if mappedErr := ConvertErrorToResponse(err); mappedErr != nil {
+					boolResponse := sig.BooleanResponse{}
+					boolResponse.Result = &sig.BooleanResponse_Error{
+						Error: mappedErr,
+					}
+					return &boolResponse, nil
+				}
+				return nil, fmt.Errorf("json.Marshal(wit). %w", err)
 			}
 			witness = string(witnessBytes)
 		}
@@ -112,13 +151,13 @@ func (s *Server) VerifyProofs(ctx context.Context, proofs *sig.Proofs) (*sig.Boo
 	boolResponse := sig.BooleanResponse{}
 	if err != nil {
 		slog.Error("Could not verify Proofs", slog.String("extra", err.Error()))
-		boolResponse.Result = &sig.BooleanResponse_Error{
-			Error: &sig.Error{
-				Code:   sig.ErrorCode_UNKNOWN,
-				Detail: "I don't know this",
-			},
+		if mappedErr := ConvertErrorToResponse(err); mappedErr != nil {
+			boolResponse.Result = &sig.BooleanResponse_Error{
+				Error: mappedErr,
+			}
+			return &boolResponse, nil
 		}
-		return &boolResponse, nil
+		return &boolResponse, fmt.Errorf("s.Signer.VerifyProofs(). %w", err)
 	}
 
 	boolResponse.Result = &sig.BooleanResponse_Success{
@@ -143,12 +182,26 @@ func (s *Server) RotateKeyset(ctx context.Context, req *sig.RotationRequest) (*s
 	rotationReq, err := ConvertSigRotationRequest(req)
 	if err != nil {
 		slog.Error("Could not convert the rotation request", slog.String("extra", err.Error()))
-		return nil, fmt.Errorf("s.Signer.RotateKeyset(). %w", err)
+		if mappedErr := ConvertErrorToResponse(err); mappedErr != nil {
+			rotationResponse := sig.KeyRotationResponse{}
+			rotationResponse.Result = &sig.KeyRotationResponse_Error{
+				Error: mappedErr,
+			}
+			return &rotationResponse, nil
+		}
+		return nil, fmt.Errorf("ConvertSigRotationRequest(). %w", err)
 	}
 
 	newKey, err := s.Signer.RotateKeyset(rotationReq.Unit, rotationReq.Fee, rotationReq.MaxOrder)
 	if err != nil {
 		slog.Error("Could not rotate keysets", slog.String("extra", err.Error()))
+		if mappedErr := ConvertErrorToResponse(err); mappedErr != nil {
+			rotationResponse := sig.KeyRotationResponse{}
+			rotationResponse.Result = &sig.KeyRotationResponse_Error{
+				Error: mappedErr,
+			}
+			return &rotationResponse, nil
+		}
 		return nil, fmt.Errorf("s.Signer.RotateKeyset(). %w", err)
 	}
 	rotationResponse := ConvertToKeyRotationResponse(newKey)

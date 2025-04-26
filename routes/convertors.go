@@ -132,9 +132,18 @@ func ConvertSigUnitToCashuUnit(sigUnit *sig.CurrencyUnit) (cashu.Unit, error) {
 }
 
 func ConvertErrorToResponse(err error) *sig.Error {
+	// If error is nil, return nil to maintain the same behavior as mapErrorToGrpcError
+	if err == nil {
+		return nil
+	}
+
+	// Create error response
 	error := sig.Error{}
 
 	switch {
+	case errors.Is(err, cashu.UsingInactiveKeyset):
+		error.Code = sig.ErrorCode_KEYSET_INACTIVE
+		error.Detail = "Using an inactive keyset"
 	case errors.Is(err, cashu.ErrInvalidBlindMessage):
 		error.Code = sig.ErrorCode_INVALID_BLIND_MESSAGE
 		error.Detail = "Invalid blind message"
@@ -143,16 +152,14 @@ func ConvertErrorToResponse(err error) *sig.Error {
 		error.Detail = "Unit not supported"
 	case errors.Is(err, cashu.ErrKeysetForProofNotFound):
 		error.Code = sig.ErrorCode_KEYSET_NOT_KNOWN
-		error.Detail = "Keyset does not exists"
+		error.Detail = "Keyset does not exist"
 	case errors.Is(err, cashu.ErrInvalidProof):
 		error.Code = sig.ErrorCode_INVALID_PROOF
 		error.Detail = "Invalid proof"
 	default:
 		error.Code = sig.ErrorCode_UNKNOWN
 		error.Detail = err.Error()
-
 	}
-	// switch error
 
 	return &error
 }

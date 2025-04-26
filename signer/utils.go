@@ -150,7 +150,7 @@ func GetKeysetsFromSeeds(seeds []database.Seed, mintKey *hdkeychain.ExtendedKey)
 		}
 
 		if keyset.Id != seed.Id {
-			log.Panicf("The ids should be same. Keyset.Id: %v. Seed.Id ", keyset.Id, seed.Id)
+			log.Panicf("The ids should be same. Keyset.Id: %v. Seed.Id: %v", keyset.Id, seed.Id)
 		}
 
 		publicKeyset := MakeMintPublickeys(keyset)
