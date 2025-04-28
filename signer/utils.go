@@ -22,6 +22,7 @@ func DeriveKeyset(mintKey *hdkeychain.ExtendedKey, seed database.Seed) (crypto.M
 		Keys:              make(map[uint64]crypto.KeyPair),
 	}
 
+	slog.Debug("converting unit to cashu unit", slog.String("unit", seed.Unit))
 	unit, err := cashu.UnitFromString(seed.Unit)
 	if err != nil {
 		return keyset, fmt.Errorf("UnitFromString(seed.Unit) %w", err)

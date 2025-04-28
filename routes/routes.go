@@ -20,8 +20,6 @@ type Server struct {
 	sig.SignerServiceServer
 }
 
-
-
 func (s *Server) BlindSign(ctx context.Context, message *sig.BlindedMessages) (*sig.BlindSignResponse, error) {
 	slog.Info("Receive request for Blind signing")
 

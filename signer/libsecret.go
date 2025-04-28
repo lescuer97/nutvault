@@ -2,7 +2,6 @@ package signer
 
 import (
 	"fmt"
-	"log"
 	"log/slog"
 
 	"github.com/godbus/dbus/v5"
@@ -51,7 +50,7 @@ func GetNutmixSignerKey(envPrivateKey string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to search items: %v", err)
 	}
-	log.Println("trying to get private key from secret service")
+	slog.Debug("trying to get private key from secret service")
 
 	// Create a session for secret transfer
 	var openSession dbus.ObjectPath

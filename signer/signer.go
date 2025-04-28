@@ -171,7 +171,6 @@ func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint64, max_order uint64) (Mi
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return newKey, fmt.Errorf("database.GetSeedsByUnit(tx, unit). %w", err)
-
 		}
 	}
 	slog.Debug("Finding highest current version of seed")

@@ -7,6 +7,7 @@ import (
 	"embed"
 	"fmt"
 	"log"
+	"log/slog"
 
 	"github.com/lescuer97/nutmix/api/cashu"
 	_ "github.com/mattn/go-sqlite3"
@@ -33,6 +34,7 @@ var embedMigrations embed.FS
 func DatabaseSetup(ctx context.Context, databaseDir string) (SqliteDB, error) {
 	var sqlitedb SqliteDB
 
+	slog.Debug("Opening database")
 	db, err := sql.Open("sqlite3", databaseDir+"/"+"app.db")
 	if err != nil {
 		return sqlitedb, fmt.Errorf(`sql.Open("sqlite3", string + "app.db" ). %w`, err)
@@ -44,6 +46,7 @@ func DatabaseSetup(ctx context.Context, databaseDir string) (SqliteDB, error) {
 		log.Fatalf("Error setting dialect: %v", err)
 	}
 
+	slog.Debug("Running migrations")
 	if err := goose.Up(db, "migrations"); err != nil {
 		log.Fatalf("Error running migrations: %v", err)
 	}

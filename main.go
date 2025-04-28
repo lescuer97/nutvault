@@ -58,7 +58,6 @@ func main() {
 	ctx := context.Background()
 	sqlite, err := database.DatabaseSetup(ctx, homeDir)
 	defer sqlite.Db.Close()
-
 	if err != nil {
 		log.Panicf(`database.DatabaseSetup(ctx, "migrations"). %+v`, err)
 	}
