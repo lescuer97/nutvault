@@ -1,6 +1,8 @@
 package signer
 
 import (
+	"crypto/sha256"
+	"encoding/binary"
 	"fmt"
 	"log"
 	"log/slog"
@@ -13,7 +15,7 @@ import (
 	"github.com/lescuer97/nutmix/api/cashu"
 )
 
-func DeriveKeyset(mintKey *hdkeychain.ExtendedKey, seed database.Seed) (crypto.MintKeyset, error) {
+func DeriveKeyset(mintKey *hdkeychain.ExtendedKey, seed database.Seed, maxOrder uint32) (crypto.MintKeyset, error) {
 	keyset := crypto.MintKeyset{
 		Unit:              seed.Unit,
 		InputFeePpk:       seed.InputFeePpk,
@@ -28,7 +30,7 @@ func DeriveKeyset(mintKey *hdkeychain.ExtendedKey, seed database.Seed) (crypto.M
 		return keyset, fmt.Errorf("UnitFromString(seed.Unit) %w", err)
 	}
 
-	amounts := GetAmountsForKeysets()
+	amounts := GetAmountsForKeysets(maxOrder)
 	if unit == cashu.AUTH {
 		newMap := make(keysetAmounts)
 		newMap[1] = 0
@@ -101,9 +103,18 @@ func GenerateKeypairsLegacy(versionKey *hdkeychain.ExtendedKey, values keysetAmo
 	return nil
 }
 
-func KeyDerivation(key *hdkeychain.ExtendedKey, keyset *crypto.MintKeyset, seed database.Seed, unit cashu.Unit, amounts keysetAmounts) error {
-	unitKey, err := key.Derive(hdkeychain.HardenedKeyStart + uint32(unit.EnumIndex()))
+const PeanutUTF8 = uint32(129372)
 
+func KeyDerivation(key *hdkeychain.ExtendedKey, keyset *crypto.MintKeyset, seed database.Seed, unit cashu.Unit, amounts keysetAmounts) error {
+	peanutKey, err := key.Derive(hdkeychain.HardenedKeyStart + PeanutUTF8)
+	if err != nil {
+		return fmt.Errorf("mintKey.NewChildKey(uint32(unit.EnumIndex())). %w", err)
+	}
+
+	// parse the unit string into an integer from a sha256
+	unitSha256 := sha256.Sum256([]byte(unit.String()))
+	unitInteger := binary.BigEndian.Uint32(unitSha256[:4])
+	unitKey, err := peanutKey.Derive(hdkeychain.HardenedKeyStart + uint32(unitInteger))
 	if err != nil {
 		return fmt.Errorf("mintKey.NewChildKey(uint32(unit.EnumIndex())). %w", err)
 	}
@@ -145,7 +156,7 @@ func GetKeysetsFromSeeds(seeds []database.Seed, mintKey *hdkeychain.ExtendedKey)
 	newActiveKeysets := make(map[string]MintPublicKeyset)
 
 	for _, seed := range seeds {
-		keyset, err := DeriveKeyset(mintKey, seed)
+		keyset, err := DeriveKeyset(mintKey, seed, seed.MaxOrder)
 		if err != nil {
 			return newKeysets, newActiveKeysets, fmt.Errorf("DeriveKeyset(mintKey, seed) %w", err)
 		}
@@ -167,15 +178,15 @@ func GetKeysetsFromSeeds(seeds []database.Seed, mintKey *hdkeychain.ExtendedKey)
 	return newKeysets, newActiveKeysets, nil
 }
 
-const MaxKeysetAmount int = 64
+const DefaultMaxOrder  = uint32(64)
 
 // key is the amount and I is the index for derivation
 type keysetAmounts = map[uint64]int
 
-func GetAmountsForKeysets() keysetAmounts {
+func GetAmountsForKeysets(max_order uint32) keysetAmounts {
 	keys := make(keysetAmounts)
 
-	for i := 0; i < MaxKeysetAmount; i++ {
+	for i := 0; i < int(max_order); i++ {
 		keys[uint64(math.Pow(2, float64(i)))] = i
 	}
 	return keys

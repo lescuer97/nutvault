@@ -3,6 +3,7 @@ package signer
 import (
 	"fmt"
 	"log"
+	"log/slog"
 	"nutmix_remote_signer/database"
 
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
@@ -46,25 +47,29 @@ func (s *Signer) GenerateMintKeysFromPublicKeysets(amounts keysetAmounts) (map[s
 
 	privateKeysets := make(map[string]crypto.MintKeyset)
 	privateKeyFromDbus, err := GetNutmixSignerKey("")
+	defer func() {
+		privateKeyFromDbus = ""
+	}()
 	if err != nil {
 		return privateKeysets, fmt.Errorf("signer.getSignerPrivateKey(). %w", err)
 	}
 
 	privateKey, err := s.getSignerPrivateKey(privateKeyFromDbus)
+	defer func() {
+		privateKey = nil
+	}()
 	if err != nil {
 		return privateKeysets, fmt.Errorf("signer.getSignerPrivateKey(). %w", err)
 	}
 	mintKey, err := hdkeychain.NewMaster(privateKey.Serialize(), &chaincfg.MainNetParams)
+	defer func() {
+		mintKey = nil
+	}()
 	if err != nil {
 		return privateKeysets, fmt.Errorf(" bip32.NewMasterKey(privateKey.Serialize()). %w", err)
 	}
-	defer func() {
-		privateKeyFromDbus = ""
-		privateKey = nil
-		mintKey = nil
-	}()
 
-	log.Printf("\n generating keys for %v amounts\n ", len(amounts))
+	slog.Debug(fmt.Sprintf("\n generating keys for %v amounts\n ", len(amounts)))
 	for i, val := range s.keysets {
 
 		privateKeysets[i] = crypto.MintKeyset{Id: val.Id, Unit: val.Id, DerivationPathIdx: val.DerivationPathIdx, Active: val.Active, InputFeePpk: val.InputFeePpk}

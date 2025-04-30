@@ -5,6 +5,7 @@ import (
 	"fmt"
 	sig "nutmix_remote_signer/gen"
 	"nutmix_remote_signer/signer"
+	"nutmix_remote_signer/utils"
 	"strings"
 
 	"github.com/lescuer97/nutmix/api/cashu"
@@ -84,7 +85,7 @@ func ConvertToKeyRotationResponse(key signer.MintPublicKeyset) *sig.KeyRotationR
 type RotationRequest struct {
 	Fee      uint64
 	Unit     cashu.Unit
-	MaxOrder uint64
+	MaxOrder uint32
 }
 
 func ConvertSigRotationRequest(req *sig.RotationRequest) (RotationRequest, error) {
@@ -156,6 +157,9 @@ func ConvertErrorToResponse(err error) *sig.Error {
 	case errors.Is(err, cashu.ErrInvalidProof):
 		error.Code = sig.ErrorCode_INVALID_PROOF
 		error.Detail = "Invalid proof"
+	case errors.Is(err, utils.ErrAboveMaxOrder):
+		error.Code = sig.ErrorCode_COULD_NOT_ROTATE_KEYSET
+		error.Detail = "The max order was above the limit"
 	default:
 		error.Code = sig.ErrorCode_UNKNOWN
 		error.Detail = err.Error()

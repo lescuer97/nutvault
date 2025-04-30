@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"nutmix_remote_signer/database"
+	"nutmix_remote_signer/utils"
 	"os"
 	"strconv"
 	"time"
@@ -24,8 +25,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/lescuer97/nutmix/api/cashu"
 )
-
-var ErrNoKeysetFound = errors.New("No keyset found")
 
 type Signer struct {
 	keysets       map[string]MintPublicKeyset
@@ -69,7 +68,7 @@ func SetupLocalSigner(db database.SqliteDB) (Signer, error) {
 	if len(seeds) == 0 {
 		slog.Info("There are no seeds available.")
 		slog.Info("Creating a new seed")
-		newSeed, err := signer.createNewSeed(masterKey, cashu.Sat, 1, 0)
+		newSeed, err := signer.createNewSeed(masterKey, cashu.Sat, 1, 0, DefaultMaxOrder)
 
 		if err != nil {
 			return signer, fmt.Errorf("signer.createNewSeed(masterKey, 1, 0). %w", err)
@@ -127,7 +126,7 @@ func (l *Signer) getSignerPrivateKey(private_key string) (*secp256k1.PrivateKey,
 	return mintKey, nil
 }
 
-func (l *Signer) createNewSeed(mintPrivateKey *hdkeychain.ExtendedKey, unit cashu.Unit, version int, fee uint) (database.Seed, error) {
+func (l *Signer) createNewSeed(mintPrivateKey *hdkeychain.ExtendedKey, unit cashu.Unit, version int, fee uint, max_order uint32) (database.Seed, error) {
 	slog.Info("Generating new seed", slog.String("unit", unit.String()), slog.String("version", strconv.FormatInt(int64(version), 10)), slog.String("fee", strconv.FormatUint(uint64(fee), 10)))
 	// rotate one level up
 	newSeed := database.Seed{
@@ -137,9 +136,10 @@ func (l *Signer) createNewSeed(mintPrivateKey *hdkeychain.ExtendedKey, unit cash
 		Unit:        unit.String(),
 		InputFeePpk: fee,
 		Legacy:      false,
+		MaxOrder: max_order,
 	}
 
-	keyset, err := DeriveKeyset(mintPrivateKey, newSeed)
+	keyset, err := DeriveKeyset(mintPrivateKey, newSeed, newSeed.MaxOrder)
 	if err != nil {
 		return newSeed, fmt.Errorf("DeriveKeyset(mintPrivateKey, newSeed) %w", err)
 	}
@@ -154,10 +154,13 @@ func (l *Signer) createNewSeed(mintPrivateKey *hdkeychain.ExtendedKey, unit cash
 
 }
 
-func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint64, max_order uint64) (MintPublicKeyset, error) {
+func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint64, max_order uint32) (MintPublicKeyset, error) {
 	slog.Info("Rotating keyset", slog.String("unit", unit.String()), slog.String("fee", strconv.FormatUint(uint64(fee), 10)))
-
 	newKey := MintPublicKeyset{}
+	if max_order > DefaultMaxOrder {
+		return newKey, utils.ErrAboveMaxOrder
+	}
+
 	tx, err := l.db.Db.Begin()
 	if err != nil {
 		return newKey, fmt.Errorf("l.db.GetTx(ctx). %w", err)
@@ -200,7 +203,7 @@ func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint64, max_order uint64) (Mi
 	}
 
 	// Create New seed with one higher version
-	newSeed, err := l.createNewSeed(signerMasterKey, unit, highestSeed.Version+1, uint(fee))
+	newSeed, err := l.createNewSeed(signerMasterKey, unit, highestSeed.Version+1, uint(fee), max_order)
 
 	if err != nil {
 		return newKey, fmt.Errorf(`l.createNewSeed(signerMasterKey, unit, highestSeed.Version+1, fee) %w`, err)
@@ -243,7 +246,7 @@ func (l *Signer) SignBlindMessages(messages goNutsCashu.BlindedMessages) (goNuts
 	var blindedSignatures goNutsCashu.BlindedSignatures
 
 	indexesForGeneration := make(keysetAmounts)
-	amounts := GetAmountsForKeysets()
+	amounts := GetAmountsForKeysets(DefaultMaxOrder)
 
 	slog.Debug("Finding what amounts we need to create private keys for")
 	// get index of amounts to use for generation
@@ -260,6 +263,9 @@ func (l *Signer) SignBlindMessages(messages goNutsCashu.BlindedMessages) (goNuts
 	}
 
 	keysets, err := l.GenerateMintKeysFromPublicKeysets(indexesForGeneration)
+	defer func() {
+		keysets = nil
+	}()
 	if err != nil {
 		err = fmt.Errorf("l.GenerateMintKeysFromPublicKeysets(indexesForGeneration): %w", err)
 		return nil, err
@@ -308,7 +314,7 @@ func (l *Signer) SignBlindMessages(messages goNutsCashu.BlindedMessages) (goNuts
 
 func (l *Signer) VerifyProofs(proofs goNutsCashu.Proofs, blindMessages goNutsCashu.BlindedMessages) error {
 	indexesForGeneration := make(keysetAmounts)
-	amounts := GetAmountsForKeysets()
+	amounts := GetAmountsForKeysets(DefaultMaxOrder)
 
 	slog.Debug("Finding what amounts we need to create private keys for")
 	// get index of amounts to use for generation
@@ -325,6 +331,9 @@ func (l *Signer) VerifyProofs(proofs goNutsCashu.Proofs, blindMessages goNutsCas
 	}
 
 	keysets, err := l.GenerateMintKeysFromPublicKeysets(indexesForGeneration)
+	defer func() {
+		keysets = nil
+	}()
 	if err != nil {
 		err = fmt.Errorf("l.GenerateMintKeysFromPublicKeysets(indexesForGeneration): %w", err)
 		return err

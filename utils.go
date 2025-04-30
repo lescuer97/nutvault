@@ -10,7 +10,7 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-const RataskerFile = ".remote_signer"
+const NutvaultName = ".nutvault"
 
 func GetHomeDirectory() (string, error) {
 
@@ -19,7 +19,7 @@ func GetHomeDirectory() (string, error) {
 		return "", fmt.Errorf("os.UserHomeDir(). %w", err)
 	}
 
-	rataskerDir := homedir + "/" + RataskerFile
+	rataskerDir := homedir + "/" + NutvaultName
 	err = MakeSureFilePathExists(rataskerDir, "")
 	if err != nil {
 		return "", fmt.Errorf("MakeSureFilePathExists(rataskerDir ). %w", err)

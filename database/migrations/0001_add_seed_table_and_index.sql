@@ -7,6 +7,7 @@ CREATE TABLE "seeds" (
 	input_fee_ppk int NOT NULL DEFAULT 0,
 	version int NOT NULL,
 	legacy bool NOT NULL DEFAULT FALSE,
+	max_order int4 NOT NULL,
 	CONSTRAINT seeds_pk PRIMARY KEY (id),
 	CONSTRAINT seeds_unique UNIQUE (id)
 );
