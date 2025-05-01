@@ -22,7 +22,7 @@ type Seed struct {
 	Id          string
 	InputFeePpk uint `json:"input_fee_ppk" db:"input_fee_ppk"`
 	Legacy      bool
-	MaxOrder      uint32 `db:"max_order"`
+	MaxOrder    uint32 `db:"max_order"`
 }
 
 type SqliteDB struct {

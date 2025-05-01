@@ -105,15 +105,19 @@ func GenerateKeypairsLegacy(versionKey *hdkeychain.ExtendedKey, values keysetAmo
 
 const PeanutUTF8 = uint32(129372)
 
+func ParseUnitToIntegerReference(unit cashu.Unit) uint32 {
+	unitSha256 := sha256.Sum256([]byte(unit.String()))
+	unitInteger := binary.BigEndian.Uint32(unitSha256[:4])
+	return unitInteger
+}
+
 func KeyDerivation(key *hdkeychain.ExtendedKey, keyset *crypto.MintKeyset, seed database.Seed, unit cashu.Unit, amounts keysetAmounts) error {
 	peanutKey, err := key.Derive(hdkeychain.HardenedKeyStart + PeanutUTF8)
 	if err != nil {
 		return fmt.Errorf("mintKey.NewChildKey(uint32(unit.EnumIndex())). %w", err)
 	}
+	unitInteger := ParseUnitToIntegerReference(unit)
 
-	// parse the unit string into an integer from a sha256
-	unitSha256 := sha256.Sum256([]byte(unit.String()))
-	unitInteger := binary.BigEndian.Uint32(unitSha256[:4])
 	unitKey, err := peanutKey.Derive(hdkeychain.HardenedKeyStart + uint32(unitInteger))
 	if err != nil {
 		return fmt.Errorf("mintKey.NewChildKey(uint32(unit.EnumIndex())). %w", err)
@@ -178,7 +182,7 @@ func GetKeysetsFromSeeds(seeds []database.Seed, mintKey *hdkeychain.ExtendedKey)
 	return newKeysets, newActiveKeysets, nil
 }
 
-const DefaultMaxOrder  = uint32(64)
+const DefaultMaxOrder = uint32(64)
 
 // key is the amount and I is the index for derivation
 type keysetAmounts = map[uint64]int

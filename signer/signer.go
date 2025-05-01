@@ -136,7 +136,7 @@ func (l *Signer) createNewSeed(mintPrivateKey *hdkeychain.ExtendedKey, unit cash
 		Unit:        unit.String(),
 		InputFeePpk: fee,
 		Legacy:      false,
-		MaxOrder: max_order,
+		MaxOrder:    max_order,
 	}
 
 	keyset, err := DeriveKeyset(mintPrivateKey, newSeed, newSeed.MaxOrder)
