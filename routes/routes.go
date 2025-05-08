@@ -34,9 +34,7 @@ func (s *Server) BlindSign(ctx context.Context, message *sig.BlindedMessages) (*
 	if err != nil {
 		slog.Error(err.Error())
 		if mappedErr := ConvertErrorToResponse(err); mappedErr != nil {
-			blindSigsResponse.Result = &sig.BlindSignResponse_Error{
-				Error: mappedErr,
-			}
+			blindSigsResponse.Error = mappedErr
 			return &blindSigsResponse, nil
 		}
 		return &blindSigsResponse, fmt.Errorf("s.signer.SignBlindMessages(). %w", err)
@@ -45,17 +43,12 @@ func (s *Server) BlindSign(ctx context.Context, message *sig.BlindedMessages) (*
 	blindSignatures := sig.BlindSignatures{
 		BlindSignatures: []*sig.BlindSignature{},
 	}
-	blindSigsResult := sig.BlindSignResponse_Sigs{
-		Sigs: &blindSignatures,
-	}
 	for _, val := range blindSigs {
 		blindSec, err := hex.DecodeString(val.C_)
 		if err != nil {
 			slog.Error("Could not decode blindSignature ", slog.String("extra", err.Error()))
 			if mappedErr := ConvertErrorToResponse(err); mappedErr != nil {
-				blindSigsResponse.Result = &sig.BlindSignResponse_Error{
-					Error: mappedErr,
-				}
+				blindSigsResponse.Error = mappedErr
 				return &blindSigsResponse, nil
 			}
 			return &blindSigsResponse, fmt.Errorf("hex.DecodeString(val.C_). %w", err)
@@ -65,9 +58,7 @@ func (s *Server) BlindSign(ctx context.Context, message *sig.BlindedMessages) (*
 		if err != nil {
 			mappedErr := ConvertErrorToResponse(fmt.Errorf("hex.DecodeString(val.DLEQ.E)): %w %w", cashu.ErrInvalidBlindMessage, err))
 			if mappedErr != nil {
-				blindSigsResponse.Result = &sig.BlindSignResponse_Error{
-					Error: mappedErr,
-				}
+				blindSigsResponse.Error = mappedErr
 				return &blindSigsResponse, nil
 			}
 			return nil, err
@@ -77,9 +68,7 @@ func (s *Server) BlindSign(ctx context.Context, message *sig.BlindedMessages) (*
 		if err != nil {
 			mappedErr := ConvertErrorToResponse(fmt.Errorf("hex.DecodeString(val.DLEQ.S)): %w %w", cashu.ErrInvalidBlindMessage, err))
 			if mappedErr != nil {
-				blindSigsResponse.Result = &sig.BlindSignResponse_Error{
-					Error: mappedErr,
-				}
+				blindSigsResponse.Error = mappedErr
 				return &blindSigsResponse, nil
 			}
 			return nil, err
@@ -89,10 +78,10 @@ func (s *Server) BlindSign(ctx context.Context, message *sig.BlindedMessages) (*
 			S: SBytes,
 		}
 
-		blindSigsResult.Sigs.BlindSignatures = append(blindSigsResult.Sigs.BlindSignatures, &sig.BlindSignature{Amount: val.Amount, KeysetId: val.Id, BlindedSecret: blindSec, Dleq: &dleq})
+		blindSignatures.BlindSignatures = append(blindSignatures.BlindSignatures, &sig.BlindSignature{Amount: val.Amount, KeysetId: val.Id, BlindedSecret: blindSec, Dleq: &dleq})
 	}
+	blindSigsResponse.Sigs = &blindSignatures
 
-	blindSigsResponse.Result = &blindSigsResult
 	return &blindSigsResponse, nil
 }
 
@@ -114,9 +103,7 @@ func (s *Server) VerifyProofs(ctx context.Context, proofs *sig.Proofs) (*sig.Boo
 				slog.Error("could not marshall p2pk witness", slog.String("extra", err.Error()))
 				if mappedErr := ConvertErrorToResponse(err); mappedErr != nil {
 					boolResponse := sig.BooleanResponse{}
-					boolResponse.Result = &sig.BooleanResponse_Error{
-						Error: mappedErr,
-					}
+					boolResponse.Error = mappedErr
 					return &boolResponse, nil
 				}
 				return nil, fmt.Errorf("json.Marshal(wit). %w", err)
@@ -132,9 +119,7 @@ func (s *Server) VerifyProofs(ctx context.Context, proofs *sig.Proofs) (*sig.Boo
 				slog.Error(err.Error())
 				if mappedErr := ConvertErrorToResponse(err); mappedErr != nil {
 					boolResponse := sig.BooleanResponse{}
-					boolResponse.Result = &sig.BooleanResponse_Error{
-						Error: mappedErr,
-					}
+					boolResponse.Error = mappedErr
 					return &boolResponse, nil
 				}
 				return nil, fmt.Errorf("json.Marshal(wit). %w", err)
@@ -150,17 +135,13 @@ func (s *Server) VerifyProofs(ctx context.Context, proofs *sig.Proofs) (*sig.Boo
 	if err != nil {
 		slog.Error("Could not verify Proofs", slog.String("extra", err.Error()))
 		if mappedErr := ConvertErrorToResponse(err); mappedErr != nil {
-			boolResponse.Result = &sig.BooleanResponse_Error{
-				Error: mappedErr,
-			}
+			boolResponse.Error = mappedErr
 			return &boolResponse, nil
 		}
 		return &boolResponse, fmt.Errorf("s.Signer.VerifyProofs(). %w", err)
 	}
 
-	boolResponse.Result = &sig.BooleanResponse_Success{
-		Success: true,
-	}
+	boolResponse.Success = true
 	return &boolResponse, nil
 }
 
@@ -182,9 +163,7 @@ func (s *Server) RotateKeyset(ctx context.Context, req *sig.RotationRequest) (*s
 		slog.Error("Could not convert the rotation request", slog.String("extra", err.Error()))
 		if mappedErr := ConvertErrorToResponse(err); mappedErr != nil {
 			rotationResponse := sig.KeyRotationResponse{}
-			rotationResponse.Result = &sig.KeyRotationResponse_Error{
-				Error: mappedErr,
-			}
+			rotationResponse.Error = mappedErr
 			return &rotationResponse, nil
 		}
 		return nil, fmt.Errorf("ConvertSigRotationRequest(). %w", err)
@@ -195,9 +174,7 @@ func (s *Server) RotateKeyset(ctx context.Context, req *sig.RotationRequest) (*s
 		slog.Error("Could not rotate keysets", slog.String("extra", err.Error()))
 		if mappedErr := ConvertErrorToResponse(err); mappedErr != nil {
 			rotationResponse := sig.KeyRotationResponse{}
-			rotationResponse.Result = &sig.KeyRotationResponse_Error{
-				Error: mappedErr,
-			}
+			rotationResponse.Error = mappedErr
 			return &rotationResponse, nil
 		}
 		return nil, fmt.Errorf("s.Signer.RotateKeyset(). %w", err)

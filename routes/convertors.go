@@ -34,14 +34,13 @@ func ConvertUnitToSigUnit(unit string) *sig.CurrencyUnit {
 }
 
 func ConvertToKeysResponse(pubkey []byte, keys []signer.MintPublicKeyset) *sig.KeysResponse {
-	response := sig.KeysResponse{}
-
-	responseResult := sig.KeysResponse_Keysets{
+	response := sig.KeysResponse{
 		Keysets: &sig.SignatoryKeysets{
 			Keysets: make([]*sig.KeySet, len(keys)),
 		},
-	}
-	responseResult.Keysets.Pubkey = pubkey
+}
+
+	response.Keysets.Pubkey = pubkey
 	for i, mintPubKey := range keys {
 		keys := sig.Keys{
 			Keys: mintPubKey.Keys,
@@ -54,10 +53,9 @@ func ConvertToKeysResponse(pubkey []byte, keys []signer.MintPublicKeyset) *sig.K
 			InputFeePpk: uint64(mintPubKey.InputFeePpk),
 			Keys:        &keys,
 		}
-		responseResult.Keysets.Keysets[i] = &keyset
+		response.Keysets.Keysets[i] = &keyset
 	}
 
-	response.Result = &responseResult
 	return &response
 }
 func ConvertToKeyRotationResponse(key signer.MintPublicKeyset) *sig.KeyRotationResponse {
@@ -74,11 +72,9 @@ func ConvertToKeyRotationResponse(key signer.MintPublicKeyset) *sig.KeyRotationR
 		InputFeePpk: uint64(key.InputFeePpk),
 		Keys:        &keys,
 	}
-	responseResult := sig.KeyRotationResponse_Keyset{
-		Keyset: &keyset,
-	}
 
-	response.Result = &responseResult
+	response.Keyset = &keyset
+
 	return &response
 }
 

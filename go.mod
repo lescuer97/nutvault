@@ -2,8 +2,6 @@ module nutmix_remote_signer
 
 go 1.23
 
-toolchain go1.23.5
-
 require (
 	github.com/btcsuite/btcd v0.24.2
 	github.com/btcsuite/btcd/btcec/v2 v2.3.4
