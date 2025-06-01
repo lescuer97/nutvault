@@ -2,3 +2,4 @@
 *.pb.go
 tls/
 main
+build-errors.log
