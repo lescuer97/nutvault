@@ -284,12 +284,13 @@ func (l *Signer) SignBlindMessages(messages goNutsCashu.BlindedMessages) (goNuts
 		}
 		_, exists := indexesForGeneration[output.Id]
 		if !exists {
-			i, amountExists := keyset[output.Amount]
-			if amountExists {
-				indexesForGeneration[output.Id][output.Amount] = i
-			} else {
-				return nil, fmt.Errorf("No index was found for this amount: %+v", output.Amount)
-			}
+			indexesForGeneration[output.Id] = make(map[uint64]int)
+		}
+		i, amountExists := keyset[output.Amount]
+		if amountExists {
+			indexesForGeneration[output.Id][output.Amount] = i
+		} else {
+			return nil, fmt.Errorf("No index was found for this amount: %+v", output.Amount)
 		}
 	}
 
@@ -355,12 +356,13 @@ func (l *Signer) VerifyProofs(proofs goNutsCashu.Proofs, blindMessages goNutsCas
 		}
 		_, exists := indexesForGeneration[proof.Id]
 		if !exists {
-			i, amountExists := keyset[proof.Amount]
-			if amountExists {
-				indexesForGeneration[proof.Id][proof.Amount] = i
-			} else {
-				return fmt.Errorf("No index was found for this amount: %+v", proof.Amount)
-			}
+			indexesForGeneration[proof.Id] = make(map[uint64]int)
+		}
+		i, amountExists := keyset[proof.Amount]
+		if amountExists {
+			indexesForGeneration[proof.Id][proof.Amount] = i
+		} else {
+			return fmt.Errorf("No index was found for this amount: %+v", proof.Amount)
 		}
 	}
 

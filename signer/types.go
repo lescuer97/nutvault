@@ -82,14 +82,12 @@ func (s *Signer) GenerateMintKeysFromPublicKeysets(keysetIndex KeysetGenerationI
 	slog.Debug(fmt.Sprintf("\n generating keys for %v keysets\n ", len(keysetIndex)))
 	for i, val := range s.keysets {
 
-		keysetAmounts, exists := keysetIndex[string(val.Id)]
-
+		keysetAmounts, exists := keysetIndex[hex.EncodeToString(val.Id)]
 		if !exists {
 			return privateKeysets, fmt.Errorf("Could not find keyset form index. Id: %v. %w", val.Id, cashu.ErrKeysetNotFound)
 		}
 
 		hexId := hex.EncodeToString(val.Id)
-
 		privateKeysets[i] = MintKeyset{Id: val.Id, Unit: val.Unit, DerivationPathIdx: val.DerivationPathIdx, Active: val.Active, InputFeePpk: val.InputFeePpk}
 		keyset := MintKeyset{Id: val.Id, Unit: val.Unit, DerivationPathIdx: val.DerivationPathIdx, Active: val.Active, InputFeePpk: val.InputFeePpk, Keys: make(map[uint64]crypto.KeyPair)}
 
@@ -99,7 +97,6 @@ func (s *Signer) GenerateMintKeysFromPublicKeysets(keysetIndex KeysetGenerationI
 		}
 
 		seed := database.Seed{Active: val.Active, Id: hexId, Unit: val.Unit, Version: int(val.DerivationPathIdx), InputFeePpk: val.InputFeePpk, Legacy: val.Legacy}
-
 		if val.Legacy {
 			err := LegacyKeyDerivation(mintKey, &keyset, seed, unit, keysetAmounts)
 			if err != nil {

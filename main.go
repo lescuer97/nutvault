@@ -67,10 +67,22 @@ func main() {
 		log.Panicf(`signer.SetupLocalSigner(sqlite). %+v`, err)
 	}
 
-	// Create Unix listener
-	listener, err := net.Listen("unix", abstractSocket)
-	if err != nil {
-		log.Fatal("Error creating Unix socket:", err)
+	var listener net.Listener
+	if os.Getenv("NETWORK") == "true" {
+		// Create Unix listener
+		slog.Info("Listening on network socket", slog.String("port", ":1721"))
+		listener, err = net.Listen("tcp", ":1721")
+		if err != nil {
+			log.Fatal("Error creating Unix socket:", err)
+		}
+	} else {
+		// Create Unix listener
+		slog.Info("Listening on abstract socket", slog.String("port", abstractSocket))
+		listener, err = net.Listen("unix", abstractSocket)
+		if err != nil {
+			log.Fatal("Error creating Unix socket:", err)
+		}
+
 	}
 
 	creds, err := GetTlsSecurityCredential()
@@ -78,7 +90,6 @@ func main() {
 		log.Fatalf("Error creating Unix socket: %+v", err)
 	}
 
-	slog.Info("Listening on unix socket", slog.String("port", abstractSocket))
 	// Create a new gRPC server
 	s := grpc.NewServer(grpc.Creds(creds))
 
