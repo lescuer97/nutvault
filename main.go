@@ -31,7 +31,7 @@ func main() {
 		log.Panicf(`godotenv.Load(). %+v`, err)
 	}
 
-	homeDir, err := GetHomeDirectory()
+	homeDir, err := GetConfigDirectory()
 	if err != nil {
 		log.Panicf(`utils.GetRastaskerHomeDirectory(). %+v`, err)
 	}

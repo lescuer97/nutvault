@@ -7,10 +7,11 @@ CREATE TABLE "seeds" (
 	input_fee_ppk int NOT NULL DEFAULT 0,
 	version int NOT NULL,
 	legacy bool NOT NULL DEFAULT FALSE,
-	max_order int4 NOT NULL,
+	amounts TEXT NOT NULL,
 	CONSTRAINT seeds_pk PRIMARY KEY (id),
 	CONSTRAINT seeds_unique UNIQUE (id)
 );
+
 CREATE INDEX IF NOT EXISTS idx_seed_id ON seeds (id);
 
 -- +goose Down

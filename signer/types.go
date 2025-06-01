@@ -1,6 +1,7 @@
 package signer
 
 import (
+	"encoding/hex"
 	"fmt"
 	"log"
 	"log/slog"
@@ -13,7 +14,7 @@ import (
 )
 
 type MintPublicKeyset struct {
-	Id                string
+	Id                []byte
 	Unit              string
 	Active            bool
 	DerivationPathIdx uint32
@@ -21,8 +22,16 @@ type MintPublicKeyset struct {
 	InputFeePpk       uint
 	Legacy            bool
 }
+type MintKeyset struct {
+	Id                []byte
+	Unit              string
+	Active            bool
+	DerivationPathIdx uint32
+	Keys              map[uint64]crypto.KeyPair
+	InputFeePpk       uint
+}
 
-func MakeMintPublickeys(mintKey crypto.MintKeyset) MintPublicKeyset {
+func MakeMintPublickeys(mintKey MintKeyset) MintPublicKeyset {
 	result := MintPublicKeyset{
 		Id:                mintKey.Id,
 		Unit:              mintKey.Unit,
@@ -43,9 +52,9 @@ func MakeMintPublickeys(mintKey crypto.MintKeyset) MintPublicKeyset {
 	return result
 }
 
-func (s *Signer) GenerateMintKeysFromPublicKeysets(amounts keysetAmounts) (map[string]crypto.MintKeyset, error) {
+func (s *Signer) GenerateMintKeysFromPublicKeysets(keysetIndex KeysetGenerationIndexes) (map[string]MintKeyset, error) {
 
-	privateKeysets := make(map[string]crypto.MintKeyset)
+	privateKeysets := make(map[string]MintKeyset)
 	privateKeyFromDbus, err := GetNutmixSignerKey("")
 	defer func() {
 		privateKeyFromDbus = ""
@@ -65,35 +74,44 @@ func (s *Signer) GenerateMintKeysFromPublicKeysets(amounts keysetAmounts) (map[s
 	defer func() {
 		mintKey = nil
 	}()
+
 	if err != nil {
 		return privateKeysets, fmt.Errorf(" bip32.NewMasterKey(privateKey.Serialize()). %w", err)
 	}
 
-	slog.Debug(fmt.Sprintf("\n generating keys for %v amounts\n ", len(amounts)))
+	slog.Debug(fmt.Sprintf("\n generating keys for %v keysets\n ", len(keysetIndex)))
 	for i, val := range s.keysets {
 
-		privateKeysets[i] = crypto.MintKeyset{Id: val.Id, Unit: val.Id, DerivationPathIdx: val.DerivationPathIdx, Active: val.Active, InputFeePpk: val.InputFeePpk}
-		keyset := crypto.MintKeyset{Id: val.Id, Unit: val.Id, DerivationPathIdx: val.DerivationPathIdx, Active: val.Active, InputFeePpk: val.InputFeePpk, Keys: make(map[uint64]crypto.KeyPair)}
+		keysetAmounts, exists := keysetIndex[string(val.Id)]
+
+		if !exists {
+			return privateKeysets, fmt.Errorf("Could not find keyset form index. Id: %v. %w", val.Id, cashu.ErrKeysetNotFound)
+		}
+
+		hexId := hex.EncodeToString(val.Id)
+
+		privateKeysets[i] = MintKeyset{Id: val.Id, Unit: val.Unit, DerivationPathIdx: val.DerivationPathIdx, Active: val.Active, InputFeePpk: val.InputFeePpk}
+		keyset := MintKeyset{Id: val.Id, Unit: val.Unit, DerivationPathIdx: val.DerivationPathIdx, Active: val.Active, InputFeePpk: val.InputFeePpk, Keys: make(map[uint64]crypto.KeyPair)}
 
 		unit, err := cashu.UnitFromString(val.Unit)
 		if err != nil {
 			return privateKeysets, fmt.Errorf("cashu.UnitFromString(val.Unit). %w", err)
 		}
 
-		seed := database.Seed{Active: val.Active, Id: val.Id, Version: int(val.DerivationPathIdx), InputFeePpk: val.InputFeePpk, Legacy: val.Legacy}
+		seed := database.Seed{Active: val.Active, Id: hexId, Unit: val.Unit, Version: int(val.DerivationPathIdx), InputFeePpk: val.InputFeePpk, Legacy: val.Legacy}
 
 		if val.Legacy {
-			err := LegacyKeyDerivation(mintKey, &keyset, seed, unit, amounts)
+			err := LegacyKeyDerivation(mintKey, &keyset, seed, unit, keysetAmounts)
 			if err != nil {
 				return privateKeysets, fmt.Errorf("LegacyKeyDerivation(mintKey,&keyset, seed, unit ) %w", err)
 			}
 		} else {
-			err := KeyDerivation(mintKey, &keyset, seed, unit, amounts)
+			err := KeyDerivation(mintKey, &keyset, seed, unit, keysetAmounts)
 			if err != nil {
 				return privateKeysets, fmt.Errorf("KeyDerivation(mintKey,&keyset, seed, unit) %w", err)
 			}
 		}
-		privateKeysets[val.Id] = keyset
+		privateKeysets[hexId] = keyset
 	}
 	return privateKeysets, nil
 }

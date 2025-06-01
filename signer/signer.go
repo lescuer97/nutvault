@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log/slog"
 	"nutmix_remote_signer/database"
-	"nutmix_remote_signer/utils"
 	"os"
 	"strconv"
 	"time"
@@ -26,11 +25,14 @@ import (
 	"github.com/lescuer97/nutmix/api/cashu"
 )
 
+type KeysetGenerationIndexes map[string]map[uint64]int
 type Signer struct {
 	keysets       map[string]MintPublicKeyset
 	activeKeysets map[string]MintPublicKeyset
 	db            database.SqliteDB
 	pubkey        *secp256k1.PublicKey
+	// this is used to rapidly calculate what indexes are needed for keyderivation
+	keysetIndexes KeysetGenerationIndexes
 }
 
 func SetupLocalSigner(db database.SqliteDB) (Signer, error) {
@@ -65,10 +67,16 @@ func SetupLocalSigner(db database.SqliteDB) (Signer, error) {
 	if err != nil {
 		return signer, fmt.Errorf("signer.db.GetAllSeeds(). %w", err)
 	}
+	signer.keysetIndexes = make(KeysetGenerationIndexes)
 	if len(seeds) == 0 {
 		slog.Info("There are no seeds available.")
+
+		slog.Debug("Generating amounts for new seed")
+
+		amounts := GetAmountsFromMaxOrder(DefaultMaxOrder)
+
 		slog.Info("Creating a new seed")
-		newSeed, err := signer.createNewSeed(masterKey, cashu.Sat, 1, 0, DefaultMaxOrder)
+		newSeed, err := signer.createNewSeed(masterKey, cashu.Sat, 1, 0, amounts)
 
 		if err != nil {
 			return signer, fmt.Errorf("signer.createNewSeed(masterKey, 1, 0). %w", err)
@@ -96,6 +104,20 @@ func SetupLocalSigner(db database.SqliteDB) (Signer, error) {
 	keysets, activeKeysets, err := GetKeysetsFromSeeds(seeds, masterKey)
 	if err != nil {
 		return signer, fmt.Errorf(`signer.GetKeysetsFromSeeds(seeds, masterKey). %w`, err)
+	}
+
+	// Parse the seeds to get the amounts indexes
+	for _, seed := range seeds {
+		for index, val := range seed.Amounts {
+			_, exists := signer.keysetIndexes[seed.Id]
+			if !exists {
+				signer.keysetIndexes[seed.Id] = make(map[uint64]int)
+				signer.keysetIndexes[seed.Id][val] = index
+			} else {
+				signer.keysetIndexes[seed.Id][val] = index
+
+			}
+		}
 	}
 
 	slog.Debug("Setting keysets into the signer")
@@ -126,7 +148,7 @@ func (l *Signer) getSignerPrivateKey(private_key string) (*secp256k1.PrivateKey,
 	return mintKey, nil
 }
 
-func (l *Signer) createNewSeed(mintPrivateKey *hdkeychain.ExtendedKey, unit cashu.Unit, version int, fee uint, max_order uint32) (database.Seed, error) {
+func (l *Signer) createNewSeed(mintPrivateKey *hdkeychain.ExtendedKey, unit cashu.Unit, version int, fee uint, amounts []uint64) (database.Seed, error) {
 	slog.Info("Generating new seed", slog.String("unit", unit.String()), slog.String("version", strconv.FormatInt(int64(version), 10)), slog.String("fee", strconv.FormatUint(uint64(fee), 10)))
 	// rotate one level up
 	newSeed := database.Seed{
@@ -136,30 +158,30 @@ func (l *Signer) createNewSeed(mintPrivateKey *hdkeychain.ExtendedKey, unit cash
 		Unit:        unit.String(),
 		InputFeePpk: fee,
 		Legacy:      false,
-		MaxOrder:    max_order,
+		Amounts:     amounts,
 	}
 
-	keyset, err := DeriveKeyset(mintPrivateKey, newSeed, newSeed.MaxOrder)
+	keyset, err := DeriveKeyset(mintPrivateKey, newSeed, amounts)
 	if err != nil {
 		return newSeed, fmt.Errorf("DeriveKeyset(mintPrivateKey, newSeed) %w", err)
 	}
 
-	if keyset.Id == "" {
+	if len(keyset.Id) == 0 {
 		slog.Error("Keyset id should already exists at this point ")
 		panic("keyset id was not generated")
 	}
 
-	newSeed.Id = keyset.Id
+	newSeed.Id = hex.EncodeToString(keyset.Id)
 	return newSeed, nil
 
 }
 
-func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint64, max_order uint32) (MintPublicKeyset, error) {
+func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint64, amounts []uint64) (MintPublicKeyset, error) {
 	slog.Info("Rotating keyset", slog.String("unit", unit.String()), slog.String("fee", strconv.FormatUint(uint64(fee), 10)))
 	newKey := MintPublicKeyset{}
-	if max_order > DefaultMaxOrder {
-		return newKey, utils.ErrAboveMaxOrder
-	}
+	// if max_order > DefaultMaxOrder {
+	// 	return newKey, utils.ErrAboveMaxOrder
+	// }
 
 	tx, err := l.db.Db.Begin()
 	if err != nil {
@@ -203,7 +225,7 @@ func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint64, max_order uint32) (Mi
 	}
 
 	// Create New seed with one higher version
-	newSeed, err := l.createNewSeed(signerMasterKey, unit, highestSeed.Version+1, uint(fee), max_order)
+	newSeed, err := l.createNewSeed(signerMasterKey, unit, highestSeed.Version+1, uint(fee), amounts)
 
 	if err != nil {
 		return newKey, fmt.Errorf(`l.createNewSeed(signerMasterKey, unit, highestSeed.Version+1, fee) %w`, err)
@@ -234,6 +256,12 @@ func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint64, max_order uint32) (Mi
 	if err != nil {
 		return newKey, fmt.Errorf(`tx.Commit(). %w`, err)
 	}
+	// Parse the seeds to get the amounts indexes
+	for _, seed := range seeds {
+		for index, val := range seed.Amounts {
+			l.keysetIndexes[seed.Id][val] = index
+		}
+	}
 
 	l.keysets = keysets
 	l.activeKeysets = activeKeysets
@@ -245,17 +273,20 @@ func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint64, max_order uint32) (Mi
 func (l *Signer) SignBlindMessages(messages goNutsCashu.BlindedMessages) (goNutsCashu.BlindedSignatures, error) {
 	var blindedSignatures goNutsCashu.BlindedSignatures
 
-	indexesForGeneration := make(keysetAmounts)
-	amounts := GetAmountsForKeysets(DefaultMaxOrder)
+	indexesForGeneration := make(KeysetGenerationIndexes)
 
 	slog.Debug("Finding what amounts we need to create private keys for")
-	// get index of amounts to use for generation
+	// get generation index from the stored index in the signer
 	for _, output := range messages {
-		_, exists := indexesForGeneration[output.Amount]
+		keyset, keysetExits := l.keysetIndexes[output.Id]
+		if !keysetExits {
+			return nil, fmt.Errorf("Keyset does not exists: Id: %+v", output.Id)
+		}
+		_, exists := indexesForGeneration[output.Id]
 		if !exists {
-			i, amountExists := amounts[output.Amount]
+			i, amountExists := keyset[output.Amount]
 			if amountExists {
-				indexesForGeneration[output.Amount] = i
+				indexesForGeneration[output.Id][output.Amount] = i
 			} else {
 				return nil, fmt.Errorf("No index was found for this amount: %+v", output.Amount)
 			}
@@ -313,17 +344,20 @@ func (l *Signer) SignBlindMessages(messages goNutsCashu.BlindedMessages) (goNuts
 }
 
 func (l *Signer) VerifyProofs(proofs goNutsCashu.Proofs, blindMessages goNutsCashu.BlindedMessages) error {
-	indexesForGeneration := make(keysetAmounts)
-	amounts := GetAmountsForKeysets(DefaultMaxOrder)
+	indexesForGeneration := make(KeysetGenerationIndexes)
 
 	slog.Debug("Finding what amounts we need to create private keys for")
 	// get index of amounts to use for generation
 	for _, proof := range proofs {
-		_, exists := indexesForGeneration[proof.Amount]
+		keyset, keysetExits := l.keysetIndexes[proof.Id]
+		if !keysetExits {
+			return fmt.Errorf("Keyset does not exists: Id: %+v", proof.Id)
+		}
+		_, exists := indexesForGeneration[proof.Id]
 		if !exists {
-			i, amountExists := amounts[proof.Amount]
+			i, amountExists := keyset[proof.Amount]
 			if amountExists {
-				indexesForGeneration[proof.Amount] = i
+				indexesForGeneration[proof.Id][proof.Amount] = i
 			} else {
 				return fmt.Errorf("No index was found for this amount: %+v", proof.Amount)
 			}
@@ -350,7 +384,7 @@ func (l *Signer) VerifyProofs(proofs goNutsCashu.Proofs, blindMessages goNutsCas
 	return nil
 }
 
-func (l *Signer) validateProof(keysets map[string]crypto.MintKeyset, proof goNutsCashu.Proof) error {
+func (l *Signer) validateProof(keysets map[string]MintKeyset, proof goNutsCashu.Proof) error {
 	keyset, exists := keysets[proof.Id]
 	if !exists {
 		return cashu.ErrKeysetForProofNotFound

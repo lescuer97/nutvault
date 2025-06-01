@@ -3,15 +3,15 @@ package routes
 import (
 	"context"
 	"encoding/hex"
-	"encoding/json"
+	// "encoding/json"
 	"fmt"
 	"log/slog"
 	sig "nutmix_remote_signer/gen"
 	"nutmix_remote_signer/signer"
 
 	goNutsCashu "github.com/elnosh/gonuts/cashu"
-	"github.com/elnosh/gonuts/cashu/nuts/nut11"
-	"github.com/elnosh/gonuts/cashu/nuts/nut14"
+	// "github.com/elnosh/gonuts/cashu/nuts/nut11"
+	// "github.com/elnosh/gonuts/cashu/nuts/nut14"
 	"github.com/lescuer97/nutmix/api/cashu"
 )
 
@@ -25,7 +25,7 @@ func (s *Server) BlindSign(ctx context.Context, message *sig.BlindedMessages) (*
 
 	blindMessages := goNutsCashu.BlindedMessages{}
 	for _, val := range message.BlindedMessages {
-		blindMessages = append(blindMessages, goNutsCashu.BlindedMessage{Amount: val.Amount, Id: val.KeysetId, B_: hex.EncodeToString(val.BlindedSecret)})
+		blindMessages = append(blindMessages, goNutsCashu.BlindedMessage{Amount: val.Amount, Id: hex.EncodeToString(val.KeysetId), B_: hex.EncodeToString(val.BlindedSecret)})
 	}
 
 	blindSigs, err := s.Signer.SignBlindMessages(blindMessages)
@@ -78,7 +78,12 @@ func (s *Server) BlindSign(ctx context.Context, message *sig.BlindedMessages) (*
 			S: SBytes,
 		}
 
-		blindSignatures.BlindSignatures = append(blindSignatures.BlindSignatures, &sig.BlindSignature{Amount: val.Amount, KeysetId: val.Id, BlindedSecret: blindSec, Dleq: &dleq})
+		id, err := hex.DecodeString(val.Id)
+		if err != nil {
+			return &blindSigsResponse, fmt.Errorf("hex.DecodeString(val.Id). %w", err)
+		}
+
+		blindSignatures.BlindSignatures = append(blindSignatures.BlindSignatures, &sig.BlindSignature{Amount: val.Amount, KeysetId: id, BlindedSecret: blindSec, Dleq: &dleq})
 	}
 	blindSigsResponse.Sigs = &blindSignatures
 
@@ -90,44 +95,44 @@ func (s *Server) VerifyProofs(ctx context.Context, proofs *sig.Proofs) (*sig.Boo
 	cashuProofs := goNutsCashu.Proofs{}
 	slog.Debug("Parsing grpc proofs to signer types")
 	for _, val := range proofs.Proof {
-		htlcWitness := val.Witness.GetHtlcWitness()
-		p2pkWitness := val.Witness.GetP2PkWitness()
-		var witness string = ""
+		// htlcWitness := val.Witness.GetHtlcWitness()
+		// p2pkWitness := val.Witness.GetP2PkWitness()
+		// var witness string = ""
+		//
+		// if p2pkWitness != nil {
+		// 	wit := nut11.P2PKWitness{
+		// 		Signatures: p2pkWitness.Signatures,
+		// 	}
+		// 	witnessBytes, err := json.Marshal(wit)
+		// 	if err != nil {
+		// 		slog.Error("could not marshall p2pk witness", slog.String("extra", err.Error()))
+		// 		if mappedErr := ConvertErrorToResponse(err); mappedErr != nil {
+		// 			boolResponse := sig.BooleanResponse{}
+		// 			boolResponse.Error = mappedErr
+		// 			return &boolResponse, nil
+		// 		}
+		// 		return nil, fmt.Errorf("json.Marshal(wit). %w", err)
+		// 	}
+		// 	witness = string(witnessBytes)
+		// } else if htlcWitness != nil {
+		// 	wit := nut14.HTLCWitness{
+		// 		Signatures: htlcWitness.Signatures,
+		// 		Preimage:   htlcWitness.Preimage,
+		// 	}
+		// 	witnessBytes, err := json.Marshal(wit)
+		// 	if err != nil {
+		// 		slog.Error(err.Error())
+		// 		if mappedErr := ConvertErrorToResponse(err); mappedErr != nil {
+		// 			boolResponse := sig.BooleanResponse{}
+		// 			boolResponse.Error = mappedErr
+		// 			return &boolResponse, nil
+		// 		}
+		// 		return nil, fmt.Errorf("json.Marshal(wit). %w", err)
+		// 	}
+		// 	witness = string(witnessBytes)
+		// }
 
-		if p2pkWitness != nil {
-			wit := nut11.P2PKWitness{
-				Signatures: p2pkWitness.Signatures,
-			}
-			witnessBytes, err := json.Marshal(wit)
-			if err != nil {
-				slog.Error("could not marshall p2pk witness", slog.String("extra", err.Error()))
-				if mappedErr := ConvertErrorToResponse(err); mappedErr != nil {
-					boolResponse := sig.BooleanResponse{}
-					boolResponse.Error = mappedErr
-					return &boolResponse, nil
-				}
-				return nil, fmt.Errorf("json.Marshal(wit). %w", err)
-			}
-			witness = string(witnessBytes)
-		} else if htlcWitness != nil {
-			wit := nut14.HTLCWitness{
-				Signatures: htlcWitness.Signatures,
-				Preimage:   htlcWitness.Preimage,
-			}
-			witnessBytes, err := json.Marshal(wit)
-			if err != nil {
-				slog.Error(err.Error())
-				if mappedErr := ConvertErrorToResponse(err); mappedErr != nil {
-					boolResponse := sig.BooleanResponse{}
-					boolResponse.Error = mappedErr
-					return &boolResponse, nil
-				}
-				return nil, fmt.Errorf("json.Marshal(wit). %w", err)
-			}
-			witness = string(witnessBytes)
-		}
-
-		cashuProofs = append(cashuProofs, goNutsCashu.Proof{Amount: val.Amount, Id: val.KeysetId, C: hex.EncodeToString(val.C), Witness: witness, Secret: string(val.Secret)})
+		cashuProofs = append(cashuProofs, goNutsCashu.Proof{Amount: val.Amount, Id: hex.EncodeToString(val.KeysetId), C: hex.EncodeToString(val.C), Witness: "", Secret: string(val.Secret)})
 	}
 	err := s.Signer.VerifyProofs(cashuProofs, goNutsCashu.BlindedMessages{})
 
@@ -169,7 +174,7 @@ func (s *Server) RotateKeyset(ctx context.Context, req *sig.RotationRequest) (*s
 		return nil, fmt.Errorf("ConvertSigRotationRequest(). %w", err)
 	}
 
-	newKey, err := s.Signer.RotateKeyset(rotationReq.Unit, rotationReq.Fee, rotationReq.MaxOrder)
+	newKey, err := s.Signer.RotateKeyset(rotationReq.Unit, rotationReq.Fee, rotationReq.Amounts)
 	if err != nil {
 		slog.Error("Could not rotate keysets", slog.String("extra", err.Error()))
 		if mappedErr := ConvertErrorToResponse(err); mappedErr != nil {

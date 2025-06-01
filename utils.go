@@ -12,11 +12,11 @@ import (
 
 const NutvaultName = ".nutvault"
 
-func GetHomeDirectory() (string, error) {
+func GetConfigDirectory() (string, error) {
 
-	homedir, err := os.UserHomeDir()
+	homedir, err := os.UserConfigDir()
 	if err != nil {
-		return "", fmt.Errorf("os.UserHomeDir(). %w", err)
+		return "", fmt.Errorf("os.UserConfigDir(). %w", err)
 	}
 
 	rataskerDir := homedir + "/" + NutvaultName

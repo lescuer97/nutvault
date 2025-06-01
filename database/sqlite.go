@@ -1,7 +1,6 @@
 package database
 
 import (
-	// "context"
 	"context"
 	"database/sql"
 	"embed"
@@ -9,6 +8,7 @@ import (
 	"log"
 	"log/slog"
 
+	"github.com/fxamacker/cbor/v2"
 	"github.com/lescuer97/nutmix/api/cashu"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/pressly/goose/v3"
@@ -22,7 +22,7 @@ type Seed struct {
 	Id          string
 	InputFeePpk uint `json:"input_fee_ppk" db:"input_fee_ppk"`
 	Legacy      bool
-	MaxOrder    uint32 `db:"max_order"`
+	Amounts     []uint64 `db:"amounts"`
 }
 
 type SqliteDB struct {
@@ -60,7 +60,7 @@ func DatabaseSetup(ctx context.Context, databaseDir string) (SqliteDB, error) {
 
 func (sq *SqliteDB) GetAllSeeds() ([]Seed, error) {
 	seeds := []Seed{}
-	stmt, err := sq.Db.Prepare(`SELECT  created_at, active, version, unit, id,  "input_fee_ppk", legacy, max_order FROM seeds ORDER BY version DESC`)
+	stmt, err := sq.Db.Prepare(`SELECT  created_at, active, version, unit, id,  "input_fee_ppk", legacy, amounts FROM seeds ORDER BY version DESC`)
 	if err != nil {
 		return seeds, fmt.Errorf(`SELECT  created_at, active, version, unit, id,  "input_fee_ppk", legacy, max_order FROM seeds ORDER BY version DESC %w`, err)
 	}
@@ -74,9 +74,16 @@ func (sq *SqliteDB) GetAllSeeds() ([]Seed, error) {
 
 	for rows.Next() {
 		var seed Seed
-		err = rows.Scan(&seed.CreatedAt, &seed.Active, &seed.Version, &seed.Unit, &seed.Id, &seed.InputFeePpk, &seed.Legacy, &seed.MaxOrder)
+
+		amountsStr := ""
+		err = rows.Scan(&seed.CreatedAt, &seed.Active, &seed.Version, &seed.Unit, &seed.Id, &seed.InputFeePpk, &seed.Legacy, &amountsStr)
 		if err != nil {
 			return seeds, fmt.Errorf(`rows.Scan(&seed.CreatedAt, &seed.Active, &seed.Version, &seed.Unit, &seed.Id, &seed.InputFeePpk, &seed.Legacy) %w`, err)
+		}
+
+		err := cbor.Unmarshal([]byte(amountsStr), &seed.Amounts)
+		if err != nil {
+			return seeds, fmt.Errorf(`cbor.Unmarshal( []byte(amountsStr), &seed.Amounts) %w`, err)
 		}
 
 		seeds = append(seeds, seed)
@@ -100,9 +107,14 @@ func (sq *SqliteDB) GetSeedsByUnit(tx *sql.Tx, unit cashu.Unit) ([]Seed, error) 
 
 	for rows.Next() {
 		var seed Seed
-		err = rows.Scan(&seed.CreatedAt, &seed.Active, &seed.Version, &seed.Unit, &seed.Id, &seed.InputFeePpk, &seed.Legacy, &seed.MaxOrder)
+		amountsStr := ""
+		err = rows.Scan(&seed.CreatedAt, &seed.Active, &seed.Version, &seed.Unit, &seed.Id, &seed.InputFeePpk, &seed.Legacy, &amountsStr)
 		if err != nil {
 			return seeds, fmt.Errorf(`rows.Scan(&seed.CreatedAt, &seed.Active, &seed.Version, &seed.Unit, &seed.Id, &seed.InputFeePpk, &seed.Legacy, &seed.MaxOrder) %w`, err)
+		}
+		err := cbor.Unmarshal([]byte(amountsStr), &seed.Amounts)
+		if err != nil {
+			return seeds, fmt.Errorf(`cbor.Unmarshal( []byte(amountsStr), &seed.Amounts) %w`, err)
 		}
 
 		seeds = append(seeds, seed)
@@ -112,9 +124,15 @@ func (sq *SqliteDB) GetSeedsByUnit(tx *sql.Tx, unit cashu.Unit) ([]Seed, error) 
 func (sq *SqliteDB) SaveNewSeed(tx *sql.Tx, seed Seed) error {
 
 	tries := 0
+	amounts, err := cbor.Marshal(seed.Amounts)
+	if err != nil {
+		return fmt.Errorf("cbor.Marshal(seed.Amounts). %w", err)
+
+	}
 	for {
 		tries += 1
-		_, err := tx.Exec("INSERT INTO seeds ( active, created_at, unit, id, version, input_fee_ppk, legacy, max_order) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)", seed.Active, seed.CreatedAt, seed.Unit, seed.Id, seed.Version, seed.InputFeePpk, seed.Legacy, seed.MaxOrder)
+
+		_, err := tx.Exec("INSERT INTO seeds ( active, created_at, unit, id, version, input_fee_ppk, legacy, amounts) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)", seed.Active, seed.CreatedAt, seed.Unit, seed.Id, seed.Version, seed.InputFeePpk, seed.Legacy, string(amounts))
 
 		switch {
 		case err != nil && tries < 3:

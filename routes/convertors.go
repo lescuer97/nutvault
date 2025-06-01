@@ -17,15 +17,15 @@ func ConvertUnitToSigUnit(unit string) *sig.CurrencyUnit {
 
 	switch strings.ToLower(unit) {
 	case "sat":
-		currUnit.CurrencyUnit = &sig.CurrencyUnit_Unit{Unit: sig.CurrencyUnitType_SAT}
+		currUnit.CurrencyUnit = &sig.CurrencyUnit_Unit{Unit: sig.CurrencyUnitType_CURRENCY_UNIT_TYPE_SAT}
 	case "msat":
-		currUnit.CurrencyUnit = &sig.CurrencyUnit_Unit{Unit: sig.CurrencyUnitType_MSAT}
+		currUnit.CurrencyUnit = &sig.CurrencyUnit_Unit{Unit: sig.CurrencyUnitType_CURRENCY_UNIT_TYPE_MSAT}
 	case "usd":
-		currUnit.CurrencyUnit = &sig.CurrencyUnit_Unit{Unit: sig.CurrencyUnitType_USD}
+		currUnit.CurrencyUnit = &sig.CurrencyUnit_Unit{Unit: sig.CurrencyUnitType_CURRENCY_UNIT_TYPE_USD}
 	case "eur":
-		currUnit.CurrencyUnit = &sig.CurrencyUnit_Unit{Unit: sig.CurrencyUnitType_EUR}
+		currUnit.CurrencyUnit = &sig.CurrencyUnit_Unit{Unit: sig.CurrencyUnitType_CURRENCY_UNIT_TYPE_EUR}
 	case "auth":
-		currUnit.CurrencyUnit = &sig.CurrencyUnit_Unit{Unit: sig.CurrencyUnitType_AUTH}
+		currUnit.CurrencyUnit = &sig.CurrencyUnit_Unit{Unit: sig.CurrencyUnitType_CURRENCY_UNIT_TYPE_AUTH}
 	default:
 		currUnit.CurrencyUnit = &sig.CurrencyUnit_CustomUnit{CustomUnit: strings.ToLower(unit)}
 	}
@@ -38,7 +38,7 @@ func ConvertToKeysResponse(pubkey []byte, keys []signer.MintPublicKeyset) *sig.K
 		Keysets: &sig.SignatoryKeysets{
 			Keysets: make([]*sig.KeySet, len(keys)),
 		},
-}
+	}
 
 	response.Keysets.Pubkey = pubkey
 	for i, mintPubKey := range keys {
@@ -79,9 +79,9 @@ func ConvertToKeyRotationResponse(key signer.MintPublicKeyset) *sig.KeyRotationR
 }
 
 type RotationRequest struct {
-	Fee      uint64
-	Unit     cashu.Unit
-	MaxOrder uint32
+	Fee     uint64
+	Unit    cashu.Unit
+	Amounts []uint64
 }
 
 func ConvertSigRotationRequest(req *sig.RotationRequest) (RotationRequest, error) {
@@ -91,7 +91,7 @@ func ConvertSigRotationRequest(req *sig.RotationRequest) (RotationRequest, error
 		return rotationRequest, fmt.Errorf("No rotation request available")
 	}
 	rotationRequest.Fee = req.InputFeePpk
-	rotationRequest.MaxOrder = req.MaxOrder
+	rotationRequest.Amounts = req.Amounts
 
 	unit, err := ConvertSigUnitToCashuUnit(req.Unit)
 	if err != nil {
@@ -105,15 +105,15 @@ func ConvertSigRotationRequest(req *sig.RotationRequest) (RotationRequest, error
 
 func ConvertSigUnitToCashuUnit(sigUnit *sig.CurrencyUnit) (cashu.Unit, error) {
 	switch sigUnit.GetUnit().Number() {
-	case sig.CurrencyUnitType_SAT.Enum().Number():
+	case sig.CurrencyUnitType_CURRENCY_UNIT_TYPE_SAT.Enum().Number():
 		return cashu.Sat, nil
-	case sig.CurrencyUnitType_MSAT.Enum().Number():
+	case sig.CurrencyUnitType_CURRENCY_UNIT_TYPE_MSAT.Enum().Number():
 		return cashu.Msat, nil
-	case sig.CurrencyUnitType_EUR.Enum().Number():
+	case sig.CurrencyUnitType_CURRENCY_UNIT_TYPE_EUR.Enum().Number():
 		return cashu.EUR, nil
-	case sig.CurrencyUnitType_USD.Enum().Number():
+	case sig.CurrencyUnitType_CURRENCY_UNIT_TYPE_USD.Enum().Number():
 		return cashu.USD, nil
-	case sig.CurrencyUnitType_AUTH.Enum().Number():
+	case sig.CurrencyUnitType_CURRENCY_UNIT_TYPE_AUTH.Enum().Number():
 		return cashu.AUTH, nil
 
 	default:
@@ -139,25 +139,25 @@ func ConvertErrorToResponse(err error) *sig.Error {
 
 	switch {
 	case errors.Is(err, cashu.UsingInactiveKeyset):
-		error.Code = sig.ErrorCode_KEYSET_INACTIVE
+		error.Code = sig.ErrorCode_ERROR_CODE_KEYSET_INACTIVE
 		error.Detail = "Using an inactive keyset"
 	case errors.Is(err, cashu.ErrInvalidBlindMessage):
-		error.Code = sig.ErrorCode_INVALID_BLIND_MESSAGE
+		error.Code = sig.ErrorCode_ERROR_CODE_INVALID_BLIND_MESSAGE
 		error.Detail = "Invalid blind message"
 	case errors.Is(err, cashu.ErrCouldNotParseUnitString):
-		error.Code = sig.ErrorCode_UNIT_NOT_SUPPORTED
+		error.Code = sig.ErrorCode_ERROR_CODE_UNIT_NOT_SUPPORTED
 		error.Detail = "Unit not supported"
 	case errors.Is(err, cashu.ErrKeysetForProofNotFound):
-		error.Code = sig.ErrorCode_KEYSET_NOT_KNOWN
+		error.Code = sig.ErrorCode_ERROR_CODE_KEYSET_NOT_KNOWN
 		error.Detail = "Keyset does not exist"
 	case errors.Is(err, cashu.ErrInvalidProof):
-		error.Code = sig.ErrorCode_INVALID_PROOF
+		error.Code = sig.ErrorCode_ERROR_CODE_INVALID_PROOF
 		error.Detail = "Invalid proof"
 	case errors.Is(err, utils.ErrAboveMaxOrder):
-		error.Code = sig.ErrorCode_COULD_NOT_ROTATE_KEYSET
+		error.Code = sig.ErrorCode_ERROR_CODE_COULD_NOT_ROTATE_KEYSET
 		error.Detail = "The max order was above the limit"
 	default:
-		error.Code = sig.ErrorCode_UNKNOWN
+		error.Code = sig.ErrorCode_ERROR_CODE_UNSPECIFIED
 		error.Detail = err.Error()
 	}
 
