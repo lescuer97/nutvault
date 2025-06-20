@@ -55,15 +55,15 @@ func MakeMintPublickeys(mintKey MintKeyset) MintPublicKeyset {
 func (s *Signer) GenerateMintKeysFromPublicKeysets(keysetIndex KeysetGenerationIndexes) (map[string]MintKeyset, error) {
 
 	privateKeysets := make(map[string]MintKeyset)
-	privateKeyFromDbus, err := GetNutmixSignerKey("")
+	seedFromDBUS, err := GetNutmixSignerKey()
 	defer func() {
-		privateKeyFromDbus = ""
+		seedFromDBUS = ""
 	}()
 	if err != nil {
 		return privateKeysets, fmt.Errorf("signer.getSignerPrivateKey(). %w", err)
 	}
 
-	privateKey, err := s.getSignerPrivateKey(privateKeyFromDbus)
+	privateKey, err := s.getSignerPrivateKey(seedFromDBUS)
 	defer func() {
 		privateKey = nil
 	}()

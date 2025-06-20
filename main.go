@@ -52,6 +52,7 @@ func main() {
 		opts.Level = slog.LevelDebug
 		opts.AddSource = true
 	}
+
 	logger := slog.New(slog.NewJSONHandler(w, opts))
 	slog.SetDefault(logger)
 

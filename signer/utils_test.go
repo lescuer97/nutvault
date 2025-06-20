@@ -77,7 +77,7 @@ func TestDeriveKeysetSat(t *testing.T) {
 		Id:          "",
 		InputFeePpk: 0,
 		Legacy:      false,
-		MaxOrder:    DefaultMaxOrder,
+		Amounts:   GetAmountsFromMaxOrder(DefaultMaxOrder),
 	}
 	privateKeyBytes, err := hex.DecodeString(MintPrivateKey)
 	if err != nil {
@@ -91,7 +91,7 @@ func TestDeriveKeysetSat(t *testing.T) {
 		return
 	}
 
-	mintKeyset, err := DeriveKeyset(masterKey, seed, seed.MaxOrder)
+	mintKeyset, err := DeriveKeyset(masterKey, seed, seed.Amounts)
 	if err != nil {
 		t.Errorf("could not derive keysets %v", err)
 		return
@@ -185,7 +185,7 @@ func TestDeriveKeysetAuth(t *testing.T) {
 		Id:          "",
 		InputFeePpk: 0,
 		Legacy:      false,
-		MaxOrder:    DefaultMaxOrder,
+		Amounts:   GetAmountsFromMaxOrder(DefaultMaxOrder),
 	}
 	privateKeyBytes, err := hex.DecodeString(MintPrivateKey)
 	if err != nil {
@@ -199,7 +199,7 @@ func TestDeriveKeysetAuth(t *testing.T) {
 		return
 	}
 
-	mintKeyset, err := DeriveKeyset(masterKey, seed, seed.MaxOrder)
+	mintKeyset, err := DeriveKeyset(masterKey, seed, seed.Amounts)
 	if err != nil {
 		t.Errorf("could not derive keysets %v", err)
 		return

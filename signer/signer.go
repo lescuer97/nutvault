@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log/slog"
 	"nutmix_remote_signer/database"
-	"os"
 	"strconv"
 	"time"
 
@@ -23,6 +22,7 @@ import (
 	"github.com/elnosh/gonuts/crypto"
 	"github.com/jackc/pgx/v5"
 	"github.com/lescuer97/nutmix/api/cashu"
+	"github.com/tyler-smith/go-bip39"
 )
 
 type KeysetGenerationIndexes map[string]map[uint64]int
@@ -40,13 +40,13 @@ func SetupLocalSigner(db database.SqliteDB) (Signer, error) {
 		db: db,
 	}
 	slog.Info("Trying to get the Mint key")
-	mint_privkey := os.Getenv("MINT_PRIVATE_KEY")
-	privateKeyFromDbus, err := GetNutmixSignerKey(mint_privkey)
+	// mint_privkey := os.Getenv("MINT_PRIVATE_KEY")
+	seedFromDbus, err := GetNutmixSignerKey()
 	if err != nil {
 		return signer, fmt.Errorf("signer.getSignerPrivateKey(). %w", err)
 	}
 
-	privateKey, err := signer.getSignerPrivateKey(privateKeyFromDbus)
+	privateKey, err := signer.getSignerPrivateKey(seedFromDbus)
 	if err != nil {
 		return signer, fmt.Errorf("signer.getSignerPrivateKey(). %w", err)
 	}
@@ -57,7 +57,7 @@ func SetupLocalSigner(db database.SqliteDB) (Signer, error) {
 	}
 	defer func() {
 		slog.Debug("Cleaning up priv key variables")
-		privateKeyFromDbus = ""
+		seedFromDbus = ""
 		privateKey = nil
 		masterKey = nil
 	}()
@@ -137,14 +137,13 @@ func (l *Signer) GetKeysets() []MintPublicKeyset {
 	return response
 }
 
-func (l *Signer) getSignerPrivateKey(private_key string) (*secp256k1.PrivateKey, error) {
+func (l *Signer) getSignerPrivateKey(seed string) (*secp256k1.PrivateKey, error) {
 	slog.Debug("parsing private_key")
-	decodedPrivKey, err := hex.DecodeString(private_key)
+	seedBytes, err := bip39.EntropyFromMnemonic(seed)
 	if err != nil {
-		return nil, fmt.Errorf(`hex.DecodeString(mint_privkey). %w`, err)
+		return nil, fmt.Errorf(`bip39.EntropyFromMnemonic(seed). %w`, err)
 	}
-	mintKey := secp256k1.PrivKeyFromBytes(decodedPrivKey)
-
+	mintKey := secp256k1.PrivKeyFromBytes(seedBytes)
 	return mintKey, nil
 }
 
@@ -209,12 +208,12 @@ func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint64, amounts []uint64) (Mi
 
 	slog.Info(fmt.Sprintf("Current hightest seed. Version: %v. Id: %s", highestSeed.Version, highestSeed.Id))
 
-	privateKeyFromDbus, err := GetNutmixSignerKey("")
+	seedFromDBUS, err := GetNutmixSignerKey()
 	if err != nil {
 		return newKey, fmt.Errorf("signer.getSignerPrivateKey(). %w", err)
 	}
 
-	mintPrivateKey, err := l.getSignerPrivateKey(privateKeyFromDbus)
+	mintPrivateKey, err := l.getSignerPrivateKey(seedFromDBUS)
 	if err != nil {
 		return newKey, fmt.Errorf(`l.getSignerPrivateKey() %w`, err)
 	}

@@ -2,6 +2,7 @@ package signer
 
 import (
 	"fmt"
+	"log"
 	"log/slog"
 
 	"github.com/godbus/dbus/v5"
@@ -16,7 +17,7 @@ type SecretStructure struct {
 
 // GetNutmixSignerKey retrieves the secret key for the nutmix-remote-signer application
 // from the system's secret service (libsecret) via DBus
-func GetNutmixSignerKey(envPrivateKey string) (string, error) {
+func GetNutmixSignerKey() (string, error) {
 	slog.Debug("connecting to dbus")
 	// Connect to the session bus
 	conn, err := dbus.ConnectSessionBus()
@@ -40,7 +41,7 @@ func GetNutmixSignerKey(envPrivateKey string) (string, error) {
 
 	// Create search attributes for our app
 	searchAttributes := map[string]string{
-		"application": "nutmix-remote-signer",
+		"label": "nutvault-seed",
 	}
 
 	slog.Debug("Getting secret form org.freedesktop")
@@ -60,6 +61,7 @@ func GetNutmixSignerKey(envPrivateKey string) (string, error) {
 		return "", fmt.Errorf("failed to open session: %v", err)
 	}
 
+
 	// If we have a result, get the existing secret
 	if len(resultItems) > 0 {
 		// Get the first item
@@ -76,42 +78,9 @@ func GetNutmixSignerKey(envPrivateKey string) (string, error) {
 
 		// Convert the secret value to a string
 		secretValue := string(secretStruct.Value)
+		log.Printf("secretValue: %+v", secretValue)
 		return secretValue, nil
 	}
 
-	slog.Info("No secret exists for the remote signer")
-	if envPrivateKey == "" {
-		panic("private key for the mint is not set for storage")
-	}
-	properties := map[string]dbus.Variant{
-		"org.freedesktop.Secret.Item.Label": dbus.MakeVariant("Nutmix Remote Signer Key"),
-		"org.freedesktop.Secret.Item.Attributes": dbus.MakeVariant(map[string]string{
-			"application": "nutmix-remote-signer",
-			"type":        "api-key",
-		}),
-	}
-	// Prepare the secret structure
-	secret := SecretStructure{
-		Session:     openSession,
-		Parameters:  []byte{},
-		Value:       []byte(envPrivateKey),
-		ContentType: "text/plain",
-	}
-
-	slog.Info("Adding private key to secret service")
-	// Create the new item with the secret
-	var newItem dbus.ObjectPath
-	err = collection.Call(
-		"org.freedesktop.Secret.Item.SetSecret",
-		0,
-		properties,
-		secret,
-		true, // Replace if exists
-	).Store(&newItem)
-
-	if err != nil {
-		return "", fmt.Errorf("failed to store new secret: %v", err)
-	}
-
-	return envPrivateKey, nil
+	return "", fmt.Errorf("No Private key in the Libsecret for application: nutmix-remote-signer.\n Please follow the Documentation")
 }

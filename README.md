@@ -20,3 +20,9 @@ To run the signer do:
 go run ./...
 ```
 
+
+## How to add a private key to libscret
+Run the following command a write the seedphrase to the input:
+```bash 
+secret-tool store --label="nutvault-seed" label nutvault-seed
+```
