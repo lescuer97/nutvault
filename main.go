@@ -16,16 +16,8 @@ import (
 	"google.golang.org/grpc"
 )
 
-const socketPath = "/tmp/signer.sock"
 const abstractSocket = "@signer_socket"
-
 func main() {
-	// Clean up previous socket
-	if _, err := os.Stat(socketPath); err == nil {
-		if err := os.Remove(socketPath); err != nil {
-			log.Fatal("Error removing existing socket:", err)
-		}
-	}
 	err := godotenv.Load()
 	if err != nil {
 		log.Panicf(`godotenv.Load(). %+v`, err)
