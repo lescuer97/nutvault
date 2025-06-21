@@ -20,6 +20,7 @@ To run the signer do:
 go run ./...
 ```
 
+## if you want to run the remote signer exposed to the network. you just need to the `NETWORK`  enviroment variable to "true"
 
 ## How to add a private key to libscret
 Run the following command a write the seedphrase to the input:
