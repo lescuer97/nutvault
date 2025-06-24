@@ -3,6 +3,8 @@ package routes
 import (
 	"context"
 	"encoding/hex"
+	"log"
+
 	// "encoding/json"
 	"fmt"
 	"log/slog"
@@ -10,6 +12,10 @@ import (
 	"nutmix_remote_signer/signer"
 
 	goNutsCashu "github.com/elnosh/gonuts/cashu"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
+
 	// "github.com/elnosh/gonuts/cashu/nuts/nut11"
 	// "github.com/elnosh/gonuts/cashu/nuts/nut14"
 	"github.com/lescuer97/nutmix/api/cashu"
@@ -95,42 +101,6 @@ func (s *Server) VerifyProofs(ctx context.Context, proofs *sig.Proofs) (*sig.Boo
 	cashuProofs := goNutsCashu.Proofs{}
 	slog.Debug("Parsing grpc proofs to signer types")
 	for _, val := range proofs.Proof {
-		// htlcWitness := val.Witness.GetHtlcWitness()
-		// p2pkWitness := val.Witness.GetP2PkWitness()
-		// var witness string = ""
-		//
-		// if p2pkWitness != nil {
-		// 	wit := nut11.P2PKWitness{
-		// 		Signatures: p2pkWitness.Signatures,
-		// 	}
-		// 	witnessBytes, err := json.Marshal(wit)
-		// 	if err != nil {
-		// 		slog.Error("could not marshall p2pk witness", slog.String("extra", err.Error()))
-		// 		if mappedErr := ConvertErrorToResponse(err); mappedErr != nil {
-		// 			boolResponse := sig.BooleanResponse{}
-		// 			boolResponse.Error = mappedErr
-		// 			return &boolResponse, nil
-		// 		}
-		// 		return nil, fmt.Errorf("json.Marshal(wit). %w", err)
-		// 	}
-		// 	witness = string(witnessBytes)
-		// } else if htlcWitness != nil {
-		// 	wit := nut14.HTLCWitness{
-		// 		Signatures: htlcWitness.Signatures,
-		// 		Preimage:   htlcWitness.Preimage,
-		// 	}
-		// 	witnessBytes, err := json.Marshal(wit)
-		// 	if err != nil {
-		// 		slog.Error(err.Error())
-		// 		if mappedErr := ConvertErrorToResponse(err); mappedErr != nil {
-		// 			boolResponse := sig.BooleanResponse{}
-		// 			boolResponse.Error = mappedErr
-		// 			return &boolResponse, nil
-		// 		}
-		// 		return nil, fmt.Errorf("json.Marshal(wit). %w", err)
-		// 	}
-		// 	witness = string(witnessBytes)
-		// }
 
 		cashuProofs = append(cashuProofs, goNutsCashu.Proof{Amount: val.Amount, Id: hex.EncodeToString(val.KeysetId), C: hex.EncodeToString(val.C), Witness: "", Secret: string(val.Secret)})
 	}
@@ -152,6 +122,17 @@ func (s *Server) VerifyProofs(ctx context.Context, proofs *sig.Proofs) (*sig.Boo
 
 func (s *Server) Keysets(ctx context.Context, _ *sig.EmptyRequest) (*sig.KeysResponse, error) {
 	slog.Debug("Received request to all keysets")
+    md, ok := metadata.FromIncomingContext(ctx)
+    if !ok {
+        return nil, status.Error(codes.InvalidArgument, "missing metadata")
+    }
+    
+    // Get specific header values
+    authToken := md.Get("auth-token")
+    if len(authToken) == 0 {
+        return nil, status.Error(codes.Unauthenticated, "missing authToken")
+    }
+	log.Printf("authToken: %v", authToken)
 
 	keys := s.Signer.GetKeysets()
 	pubkey := s.Signer.GetSignerPubkey()

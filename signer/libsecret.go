@@ -61,7 +61,6 @@ func GetNutmixSignerKey() (string, error) {
 		return "", fmt.Errorf("failed to open session: %v", err)
 	}
 
-
 	// If we have a result, get the existing secret
 	if len(resultItems) > 0 {
 		// Get the first item
