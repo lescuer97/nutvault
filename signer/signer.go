@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"log/slog"
 	"nutmix_remote_signer/database"
 	"strconv"
@@ -26,13 +27,56 @@ import (
 )
 
 type KeysetGenerationIndexes map[string]map[uint64]int
-type Signer struct {
+
+type IndividualSigner struct {
 	keysets       map[string]MintPublicKeyset
 	activeKeysets map[string]MintPublicKeyset
-	db            database.SqliteDB
 	pubkey        *secp256k1.PublicKey
 	// this is used to rapidly calculate what indexes are needed for keyderivation
 	keysetIndexes KeysetGenerationIndexes
+}
+
+type Signer struct {
+	signers map[string]IndividualSigner
+	db      database.SqliteDB
+}
+
+func ParseMakeysForIndividualSigner(accountId string, seeds []database.Seed, masterKey *hdkeychain.ExtendedKey) (IndividualSigner, error) {
+	individualSigner := IndividualSigner{
+		keysetIndexes: make(KeysetGenerationIndexes),
+	}
+
+	keysets, activeKeysets, err := GetKeysetsFromSeeds(seeds, masterKey)
+	if err != nil {
+		return individualSigner, fmt.Errorf(`signer.GetKeysetsFromSeeds(seeds, masterKey). %w`, err)
+	}
+
+	for _, seed := range seeds {
+		if seed.AccountId != accountId {
+			log.Panicf("The accountId and the seed.AccountId should be the same. Something went really wrong")
+		}
+		for index, val := range seed.Amounts {
+			_, exists := individualSigner.keysetIndexes[seed.Id]
+			if !exists {
+				individualSigner.keysetIndexes[seed.Id] = make(map[uint64]int)
+				individualSigner.keysetIndexes[seed.Id][val] = index
+			} else {
+				individualSigner.keysetIndexes[seed.Id][val] = index
+
+			}
+		}
+	}
+
+	pubkey, err := masterKey.ECPubKey()
+	if err != nil {
+		return individualSigner, fmt.Errorf(`masterKey.ECPubKey().PubKey(). %w`, err)
+	}
+
+	individualSigner.keysets = keysets
+	individualSigner.activeKeysets = activeKeysets
+	individualSigner.pubkey = pubkey
+
+	return individualSigner, nil
 }
 
 func SetupLocalSigner(db database.SqliteDB) (Signer, error) {
@@ -50,6 +94,7 @@ func SetupLocalSigner(db database.SqliteDB) (Signer, error) {
 	if err != nil {
 		return signer, fmt.Errorf("signer.getSignerPrivateKey(). %w", err)
 	}
+
 	slog.Debug("Creating master key for derivation")
 	masterKey, err := hdkeychain.NewMaster(privateKey.Serialize(), &chaincfg.MainNetParams)
 	if err != nil {
@@ -67,63 +112,63 @@ func SetupLocalSigner(db database.SqliteDB) (Signer, error) {
 	if err != nil {
 		return signer, fmt.Errorf("signer.db.GetAllSeeds(). %w", err)
 	}
-	signer.keysetIndexes = make(KeysetGenerationIndexes)
-	if len(seeds) == 0 {
-		slog.Info("There are no seeds available.")
 
-		slog.Debug("Generating amounts for new seed")
-
-		amounts := GetAmountsFromMaxOrder(DefaultMaxOrder)
-
-		slog.Info("Creating a new seed")
-		newSeed, err := signer.createNewSeed(masterKey, cashu.Sat, 1, 0, amounts)
-
-		if err != nil {
-			return signer, fmt.Errorf("signer.createNewSeed(masterKey, 1, 0). %w", err)
-		}
-
-		tx, err := db.Db.Begin()
-		if err != nil {
-			return signer, fmt.Errorf("l.db.GetTx(ctx). %w", err)
-		}
-		defer tx.Rollback()
-
-		slog.Info("Saving seed for to the database")
-		err = db.SaveNewSeed(tx, newSeed)
-		if err != nil {
-			return signer, fmt.Errorf("db.SaveNewSeeds([]cashu.Seed{newSeed}). %w", err)
-		}
-		err = tx.Commit()
-		if err != nil {
-			return signer, fmt.Errorf(`tx.Commit(). %w`, err)
-		}
-		seeds = append(seeds, newSeed)
-	}
+	// if len(seeds) == 0 {
+	// 	slog.Info("There are no seeds available.")
+	//
+	// 	slog.Debug("Generating amounts for new seed")
+	//
+	// 	amounts := GetAmountsFromMaxOrder(DefaultMaxOrder)
+	//
+	// 	slog.Info("Creating a new seed")
+	// 	newSeed, err := signer.createNewSeed(masterKey, cashu.Sat, 1, 0, amounts)
+	//
+	// 	if err != nil {
+	// 		return signer, fmt.Errorf("signer.createNewSeed(masterKey, 1, 0). %w", err)
+	// 	}
+	//
+	// 	tx, err := db.Db.Begin()
+	// 	if err != nil {
+	// 		return signer, fmt.Errorf("l.db.GetTx(ctx). %w", err)
+	// 	}
+	// 	defer tx.Rollback()
+	//
+	// 	slog.Info("Saving seed for to the database")
+	// 	err = db.SaveNewSeed(tx, newSeed)
+	// 	if err != nil {
+	// 		return signer, fmt.Errorf("db.SaveNewSeeds([]cashu.Seed{newSeed}). %w", err)
+	// 	}
+	// 	err = tx.Commit()
+	// 	if err != nil {
+	// 		return signer, fmt.Errorf(`tx.Commit(). %w`, err)
+	// 	}
+	// 	seeds = append(seeds, newSeed)
+	// }
 
 	slog.Debug("Generating keysets from seeds")
-	keysets, activeKeysets, err := GetKeysetsFromSeeds(seeds, masterKey)
-	if err != nil {
-		return signer, fmt.Errorf(`signer.GetKeysetsFromSeeds(seeds, masterKey). %w`, err)
-	}
+	// keysets, activeKeysets, err := GetKeysetsFromSeeds(seeds, masterKey)
+	// if err != nil {
+	// 	return signer, fmt.Errorf(`signer.GetKeysetsFromSeeds(seeds, masterKey). %w`, err)
+	// }
 
 	// Parse the seeds to get the amounts indexes
-	for _, seed := range seeds {
-		for index, val := range seed.Amounts {
-			_, exists := signer.keysetIndexes[seed.Id]
-			if !exists {
-				signer.keysetIndexes[seed.Id] = make(map[uint64]int)
-				signer.keysetIndexes[seed.Id][val] = index
-			} else {
-				signer.keysetIndexes[seed.Id][val] = index
-
-			}
-		}
-	}
+	// for _, seed := range seeds {
+	// 	for index, val := range seed.Amounts {
+	// 		_, exists := signer.keysetIndexes[seed.Id]
+	// 		if !exists {
+	// 			signer.keysetIndexes[seed.Id] = make(map[uint64]int)
+	// 			signer.keysetIndexes[seed.Id][val] = index
+	// 		} else {
+	// 			signer.keysetIndexes[seed.Id][val] = index
+	//
+	// 		}
+	// 	}
+	// }
 
 	slog.Debug("Setting keysets into the signer")
-	signer.keysets = keysets
-	signer.activeKeysets = activeKeysets
-	signer.pubkey = privateKey.PubKey()
+	// signer.keysets = keysets
+	// signer.activeKeysets = activeKeysets
+	// signer.pubkey = privateKey.PubKey()
 
 	return signer, nil
 }

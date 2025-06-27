@@ -20,6 +20,7 @@ type Seed struct {
 	Version     int
 	Unit        string
 	Id          string
+	AccountId   string
 	InputFeePpk uint `json:"input_fee_ppk" db:"input_fee_ppk"`
 	Legacy      bool
 	Amounts     []uint64 `db:"amounts"`
