@@ -87,6 +87,8 @@ github.com/jrick/logrotate v1.0.0/go.mod h1:LNinyqDIJnpAur+b8yyulnQw/wDuN1+BYKlT
 github.com/kkdai/bstream v0.0.0-20161212061736-f391b8402d23/go.mod h1:J+Gs4SYgM6CZQHDETBtE9HaSEkGmuNXF86RwHhHUvq4=
 github.com/lescuer97/bip85 v0.1.0 h1:IIp5U1opNtjO3XxrQe/r3N6wAPNm/WXD20LWMUknKOY=
 github.com/lescuer97/bip85 v0.1.0/go.mod h1:KTuApJZxJKC7NnAoSAKJLdfP2VICpS6IrPthC1F0rWQ=
+github.com/lescuer97/bip85 v0.1.1 h1:J0ZZ894gMX9CX3zPxyIWc7LdIZgn9K+aPp60F0EsZNA=
+github.com/lescuer97/bip85 v0.1.1/go.mod h1:KTuApJZxJKC7NnAoSAKJLdfP2VICpS6IrPthC1F0rWQ=
 github.com/lescuer97/nutmix v0.0.0-20250316134157-6b582d582f1c h1:t1qqKTsOm/V3sVDd2D5UnmrLi22tqKjH/wgsrwqyUyU=
 github.com/lescuer97/nutmix v0.0.0-20250316134157-6b582d582f1c/go.mod h1:waUsVSWS0XXSID2uVl+FGHnlufFlrbIjm1BlOZtqgWE=
 github.com/mattn/go-isatty v0.0.20 h1:xfD0iDuEKnDkl03q4limB+vH+GxLEtL/jb4xVJSWWEY=
