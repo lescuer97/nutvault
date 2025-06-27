@@ -20,7 +20,7 @@ type Seed struct {
 	Version     int
 	Unit        string
 	Id          string
-	AccountId   string
+	AccountId   string `db:"account_id"`
 	InputFeePpk uint `json:"input_fee_ppk" db:"input_fee_ppk"`
 	Legacy      bool
 	Amounts     []uint64 `db:"amounts"`
@@ -61,7 +61,7 @@ func DatabaseSetup(ctx context.Context, databaseDir string) (SqliteDB, error) {
 
 func (sq *SqliteDB) GetAllSeeds() ([]Seed, error) {
 	seeds := []Seed{}
-	stmt, err := sq.Db.Prepare(`SELECT  created_at, active, version, unit, id,  "input_fee_ppk", legacy, amounts FROM seeds ORDER BY version DESC`)
+	stmt, err := sq.Db.Prepare(`SELECT  created_at, active, version, unit, id,  "input_fee_ppk", legacy, amounts, account_id FROM seeds ORDER BY version DESC`)
 	if err != nil {
 		return seeds, fmt.Errorf(`SELECT  created_at, active, version, unit, id,  "input_fee_ppk", legacy, max_order FROM seeds ORDER BY version DESC %w`, err)
 	}
@@ -77,7 +77,7 @@ func (sq *SqliteDB) GetAllSeeds() ([]Seed, error) {
 		var seed Seed
 
 		amountsStr := ""
-		err = rows.Scan(&seed.CreatedAt, &seed.Active, &seed.Version, &seed.Unit, &seed.Id, &seed.InputFeePpk, &seed.Legacy, &amountsStr)
+		err = rows.Scan(&seed.CreatedAt, &seed.Active, &seed.Version, &seed.Unit, &seed.Id, &seed.InputFeePpk, &seed.Legacy, &amountsStr, &seed.AccountId)
 		if err != nil {
 			return seeds, fmt.Errorf(`rows.Scan(&seed.CreatedAt, &seed.Active, &seed.Version, &seed.Unit, &seed.Id, &seed.InputFeePpk, &seed.Legacy) %w`, err)
 		}
@@ -94,7 +94,7 @@ func (sq *SqliteDB) GetAllSeeds() ([]Seed, error) {
 
 func (sq *SqliteDB) GetSeedsByUnit(tx *sql.Tx, unit cashu.Unit) ([]Seed, error) {
 	seeds := []Seed{}
-	stmt, err := tx.Prepare("SELECT  created_at, active, version, unit, id, input_fee_ppk, legacy, max_order FROM seeds WHERE unit = $1")
+		stmt, err := tx.Prepare("SELECT  created_at, active, version, unit, id, input_fee_ppk, legacy, amounts, account_id FROM seeds WHERE unit = $1")
 	if err != nil {
 		return seeds, fmt.Errorf(`tx.Prepare("SELECT  created_at, active, version, unit, id, input_fee_ppk, legacy, max_order FROM seeds WHERE unit = $1"). %w`, err)
 	}
@@ -109,7 +109,7 @@ func (sq *SqliteDB) GetSeedsByUnit(tx *sql.Tx, unit cashu.Unit) ([]Seed, error) 
 	for rows.Next() {
 		var seed Seed
 		amountsStr := ""
-		err = rows.Scan(&seed.CreatedAt, &seed.Active, &seed.Version, &seed.Unit, &seed.Id, &seed.InputFeePpk, &seed.Legacy, &amountsStr)
+		err = rows.Scan(&seed.CreatedAt, &seed.Active, &seed.Version, &seed.Unit, &seed.Id, &seed.InputFeePpk, &seed.Legacy, &amountsStr, &seed.AccountId)
 		if err != nil {
 			return seeds, fmt.Errorf(`rows.Scan(&seed.CreatedAt, &seed.Active, &seed.Version, &seed.Unit, &seed.Id, &seed.InputFeePpk, &seed.Legacy, &seed.MaxOrder) %w`, err)
 		}
@@ -133,7 +133,7 @@ func (sq *SqliteDB) SaveNewSeed(tx *sql.Tx, seed Seed) error {
 	for {
 		tries += 1
 
-		_, err := tx.Exec("INSERT INTO seeds ( active, created_at, unit, id, version, input_fee_ppk, legacy, amounts) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)", seed.Active, seed.CreatedAt, seed.Unit, seed.Id, seed.Version, seed.InputFeePpk, seed.Legacy, string(amounts))
+		_, err := tx.Exec("INSERT INTO seeds ( active, created_at, unit, id, version, input_fee_ppk, legacy, amounts, account_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)", seed.Active, seed.CreatedAt, seed.Unit, seed.Id, seed.Version, seed.InputFeePpk, seed.Legacy, string(amounts), seed.AccountId)
 
 		switch {
 		case err != nil && tries < 3:

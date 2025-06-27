@@ -10,6 +10,7 @@ CREATE TABLE accounts (
 	CONSTRAINT derivation_unique UNIQUE (derivation)
 );
 
+ALTER TABLE seeds ADD COLUMN account_id TEXT REFERENCES accounts(id) NOT NULL;
 
 CREATE TABLE auth_tokens (
 	id text NOT NULL,
@@ -32,3 +33,4 @@ DROP TABLE IF EXISTS auth_tokens;
 DROP INDEX idx_account_id;
 DROP INDEX idx_account_npub;
 DROP INDEX idx_auth_token_token;
+ALTER TABLE seeds DROP COLUMN account_id;

@@ -52,7 +52,7 @@ func MakeMintPublickeys(mintKey MintKeyset) MintPublicKeyset {
 	return result
 }
 
-func (s *Signer) GenerateMintKeysFromPublicKeysets(keysetIndex KeysetGenerationIndexes) (map[string]MintKeyset, error) {
+func (s *Signer) GenerateMintKeysFromPublicKeysets(keysetIndex KeysetGenerationIndexes, accountId string) (map[string]MintKeyset, error) {
 
 	privateKeysets := make(map[string]MintKeyset)
 	seedFromDBUS, err := GetNutmixSignerKey()
@@ -80,7 +80,11 @@ func (s *Signer) GenerateMintKeysFromPublicKeysets(keysetIndex KeysetGenerationI
 	}
 
 	slog.Debug(fmt.Sprintf("\n generating keys for %v keysets\n ", len(keysetIndex)))
-	for i, val := range s.keysets {
+	signer, exists := s.signers[accountId]
+	if !exists {
+		return privateKeysets, fmt.Errorf("signer account does not exists. %w", err)
+	}
+	for i, val := range signer.keysets {
 
 		keysetAmounts, exists := keysetIndex[hex.EncodeToString(val.Id)]
 		if !exists {
@@ -96,7 +100,7 @@ func (s *Signer) GenerateMintKeysFromPublicKeysets(keysetIndex KeysetGenerationI
 			return privateKeysets, fmt.Errorf("cashu.UnitFromString(val.Unit). %w", err)
 		}
 
-		seed := database.Seed{Active: val.Active, Id: hexId, Unit: val.Unit, Version: int(val.DerivationPathIdx), InputFeePpk: val.InputFeePpk, Legacy: val.Legacy}
+		seed := database.Seed{Active: val.Active, Id: hexId, Unit: val.Unit, Version: int(val.DerivationPathIdx), InputFeePpk: val.InputFeePpk, Legacy: val.Legacy, AccountId: accountId}
 		if val.Legacy {
 			err := LegacyKeyDerivation(mintKey, &keyset, seed, unit, keysetAmounts)
 			if err != nil {
