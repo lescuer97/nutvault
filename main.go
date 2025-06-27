@@ -84,8 +84,11 @@ func main() {
 		log.Fatalf("Error creating Unix socket: %+v", err)
 	}
 
-	// Create a new gRPC server
-	s := grpc.NewServer(grpc.Creds(creds))
+    s := grpc.NewServer(
+		grpc.Creds(creds),
+		grpc.ChainUnaryInterceptor(routes.AuthMiddleware(sqlite)),
+    )
+
 
 	// Register the service
 	sig.RegisterSignerServiceServer(s, &routes.Server{

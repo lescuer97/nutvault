@@ -1,8 +1,6 @@
 module nutmix_remote_signer
 
-go 1.23.0
-
-toolchain go1.24.3
+go 1.24.3
 
 require (
 	github.com/btcsuite/btcd v0.24.2
@@ -29,6 +27,7 @@ require (
 	github.com/decred/dcrd/crypto/blake256 v1.1.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
+	github.com/lescuer97/bip85 v0.1.0 // indirect
 	github.com/mfridman/interpolate v0.0.2 // indirect
 	github.com/sethvargo/go-retry v0.2.4 // indirect
 	github.com/tyler-smith/go-bip32 v1.0.0 // indirect

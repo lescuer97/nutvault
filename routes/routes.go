@@ -3,21 +3,13 @@ package routes
 import (
 	"context"
 	"encoding/hex"
-	"log"
 
-	// "encoding/json"
 	"fmt"
 	"log/slog"
 	sig "nutmix_remote_signer/gen"
 	"nutmix_remote_signer/signer"
 
 	goNutsCashu "github.com/elnosh/gonuts/cashu"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/status"
-
-	// "github.com/elnosh/gonuts/cashu/nuts/nut11"
-	// "github.com/elnosh/gonuts/cashu/nuts/nut14"
 	"github.com/lescuer97/nutmix/api/cashu"
 )
 
@@ -122,17 +114,6 @@ func (s *Server) VerifyProofs(ctx context.Context, proofs *sig.Proofs) (*sig.Boo
 
 func (s *Server) Keysets(ctx context.Context, _ *sig.EmptyRequest) (*sig.KeysResponse, error) {
 	slog.Debug("Received request to all keysets")
-    md, ok := metadata.FromIncomingContext(ctx)
-    if !ok {
-        return nil, status.Error(codes.InvalidArgument, "missing metadata")
-    }
-    
-    // Get specific header values
-    authToken := md.Get("auth-token")
-    if len(authToken) == 0 {
-        return nil, status.Error(codes.Unauthenticated, "missing authToken")
-    }
-	log.Printf("authToken: %v", authToken)
 
 	keys := s.Signer.GetKeysets()
 	pubkey := s.Signer.GetSignerPubkey()

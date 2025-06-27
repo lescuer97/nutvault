@@ -101,3 +101,15 @@ func (s *SqliteDB) GetAccountByNpub(npub []byte) (*Account, error) {
 
 	return &account, nil
 }
+
+func (s *SqliteDB) GetAuthTokenByToken(token string) (*AuthToken, error) {
+	row := s.Db.QueryRow("SELECT id, account_id, active, token, created_at, signature FROM auth_tokens WHERE token = ?", token)
+
+	var authToken AuthToken
+	err := row.Scan(&authToken.Id, &authToken.AccountId, &authToken.Active, &authToken.Token, &authToken.CreatedAt, &authToken.Signature)
+	if err != nil {
+		return nil, err
+	}
+
+	return &authToken, nil
+}

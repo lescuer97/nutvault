@@ -24,11 +24,11 @@ CREATE TABLE auth_tokens (
 
 CREATE INDEX IF NOT EXISTS idx_account_id ON accounts (id);
 CREATE INDEX IF NOT EXISTS idx_account_npub ON accounts (npub);
-CREATE INDEX IF NOT EXISTS idx_auth_token_id ON auth_tokens (id);
+CREATE INDEX IF NOT EXISTS idx_auth_token_token ON auth_tokens (token);
 
 -- +goose Down
 DROP TABLE IF EXISTS accounts;
 DROP TABLE IF EXISTS auth_tokens;
 DROP INDEX idx_account_id;
 DROP INDEX idx_account_npub;
-DROP INDEX idx_auth_token_id;
+DROP INDEX idx_auth_token_token;
