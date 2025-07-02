@@ -20,13 +20,24 @@ type Server struct {
 
 func (s *Server) BlindSign(ctx context.Context, message *sig.BlindedMessages) (*sig.BlindSignResponse, error) {
 	slog.Info("Receive request for Blind signing")
+	signerIn := ctx.Value(signerInfoKey)
+	signerInfo, ok := signerIn.(signer.SignerInfo)
+	if !ok {
+		slog.Error(fmt.Sprintf("no valid signer came in. %+v", signerIn))
+		errorResponse := sig.BlindSignResponse{}
+		errorResponse.Error = &sig.Error{
+			Code:   sig.ErrorCode_ERROR_CODE_UNSPECIFIED,
+			Detail: "no valid signer",
+		}
+		return &errorResponse, nil
+	}
 
 	blindMessages := goNutsCashu.BlindedMessages{}
 	for _, val := range message.BlindedMessages {
 		blindMessages = append(blindMessages, goNutsCashu.BlindedMessage{Amount: val.Amount, Id: hex.EncodeToString(val.KeysetId), B_: hex.EncodeToString(val.BlindedSecret)})
 	}
 
-	blindSigs, err := s.Signer.SignBlindMessages(blindMessages)
+	blindSigs, err := s.Signer.SignBlindMessages(blindMessages, signerInfo)
 
 	blindSigsResponse := sig.BlindSignResponse{}
 	if err != nil {
@@ -90,13 +101,25 @@ func (s *Server) BlindSign(ctx context.Context, message *sig.BlindedMessages) (*
 
 func (s *Server) VerifyProofs(ctx context.Context, proofs *sig.Proofs) (*sig.BooleanResponse, error) {
 	slog.Info("Receive Proof verification request")
+	signerIn := ctx.Value(signerInfoKey)
+	signerInfo, ok := signerIn.(signer.SignerInfo)
+	if !ok {
+		slog.Error(fmt.Sprintf("no valid signer came in. %+v", signerIn))
+		errorResponse := sig.BooleanResponse{}
+		errorResponse.Error = &sig.Error{
+			Code:   sig.ErrorCode_ERROR_CODE_UNSPECIFIED,
+			Detail: "no valid signer",
+		}
+		return &errorResponse, nil
+	}
+
 	cashuProofs := goNutsCashu.Proofs{}
 	slog.Debug("Parsing grpc proofs to signer types")
 	for _, val := range proofs.Proof {
-
 		cashuProofs = append(cashuProofs, goNutsCashu.Proof{Amount: val.Amount, Id: hex.EncodeToString(val.KeysetId), C: hex.EncodeToString(val.C), Witness: "", Secret: string(val.Secret)})
 	}
-	err := s.Signer.VerifyProofs(cashuProofs, goNutsCashu.BlindedMessages{})
+
+	err := s.Signer.VerifyProofs(signerInfo, cashuProofs, goNutsCashu.BlindedMessages{})
 
 	boolResponse := sig.BooleanResponse{}
 	if err != nil {
@@ -115,8 +138,21 @@ func (s *Server) VerifyProofs(ctx context.Context, proofs *sig.Proofs) (*sig.Boo
 func (s *Server) Keysets(ctx context.Context, _ *sig.EmptyRequest) (*sig.KeysResponse, error) {
 	slog.Debug("Received request to all keysets")
 
-	keys := s.Signer.GetKeysets()
-	pubkey := s.Signer.GetSignerPubkey()
+	signerIn := ctx.Value(signerInfoKey)
+	signerInfo, ok := signerIn.(signer.SignerInfo)
+	if !ok {
+		slog.Error(fmt.Sprintf("no valid signer came in. %+v", signerIn))
+		errorResponse := sig.KeysResponse{}
+		errorResponse.Error = &sig.Error{
+			Code:   sig.ErrorCode_ERROR_CODE_UNSPECIFIED,
+			Detail: "no valid signer",
+		}
+		return &errorResponse, nil
+	}
+
+	keys, _ := s.Signer.GetKeysets(signerInfo)
+
+	pubkey, _ := s.Signer.GetSignerPubkey(signerInfo)
 	keysResponse := ConvertToKeysResponse(pubkey, keys)
 
 	return keysResponse, nil
@@ -124,6 +160,18 @@ func (s *Server) Keysets(ctx context.Context, _ *sig.EmptyRequest) (*sig.KeysRes
 
 func (s *Server) RotateKeyset(ctx context.Context, req *sig.RotationRequest) (*sig.KeyRotationResponse, error) {
 	slog.Info("Received key rotation request")
+
+	signerIn := ctx.Value(signerInfoKey)
+	signerInfo, ok := signerIn.(signer.SignerInfo)
+	if !ok {
+		slog.Error(fmt.Sprintf("no valid signer came in. %+v", signerIn))
+		errorResponse := sig.KeyRotationResponse{}
+		errorResponse.Error = &sig.Error{
+			Code:   sig.ErrorCode_ERROR_CODE_UNSPECIFIED,
+			Detail: "no valid signer",
+		}
+		return &errorResponse, nil
+	}
 
 	rotationReq, err := ConvertSigRotationRequest(req)
 	if err != nil {
@@ -136,7 +184,7 @@ func (s *Server) RotateKeyset(ctx context.Context, req *sig.RotationRequest) (*s
 		return nil, fmt.Errorf("ConvertSigRotationRequest(). %w", err)
 	}
 
-	newKey, err := s.Signer.RotateKeyset(rotationReq.Unit, rotationReq.Fee, rotationReq.Amounts)
+	newKey, err := s.Signer.RotateKeyset(signerInfo, rotationReq.Unit, rotationReq.Fee, rotationReq.Amounts)
 	if err != nil {
 		slog.Error("Could not rotate keysets", slog.String("extra", err.Error()))
 		if mappedErr := ConvertErrorToResponse(err); mappedErr != nil {

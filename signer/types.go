@@ -80,7 +80,7 @@ func (s *Signer) GenerateMintKeysFromPublicKeysets(keysetIndex KeysetGenerationI
 		return privateKeysets, fmt.Errorf("bip85.NewBip85FromBip32Key(privateKey). %w", err)
 	}
 
-	derivedKey, err := bip85Key.DeriveToXpriv(signerInfo.derivation)
+	derivedKey, err := bip85Key.DeriveToXpriv(signerInfo.Derivation)
 	defer func() {
 		derivedKey = nil
 	}()
@@ -97,7 +97,7 @@ func (s *Signer) GenerateMintKeysFromPublicKeysets(keysetIndex KeysetGenerationI
 	}
 
 	slog.Debug(fmt.Sprintf("\n generating keys for %v keysets\n ", len(keysetIndex)))
-	signer, exists := s.signers[signerInfo.accountId]
+	signer, exists := s.signers[signerInfo.AccountId]
 	if !exists {
 		return privateKeysets, fmt.Errorf("signer account does not exists. %w", err)
 	}
@@ -117,7 +117,7 @@ func (s *Signer) GenerateMintKeysFromPublicKeysets(keysetIndex KeysetGenerationI
 			return privateKeysets, fmt.Errorf("cashu.UnitFromString(val.Unit). %w", err)
 		}
 
-		seed := database.Seed{Active: val.Active, Id: hexId, Unit: val.Unit, Version: int(val.DerivationPathIdx), InputFeePpk: val.InputFeePpk, Legacy: val.Legacy, AccountId: signerInfo.accountId}
+		seed := database.Seed{Active: val.Active, Id: hexId, Unit: val.Unit, Version: int(val.DerivationPathIdx), InputFeePpk: val.InputFeePpk, Legacy: val.Legacy, AccountId: signerInfo.AccountId}
 		if val.Legacy {
 			err := LegacyKeyDerivation(mintKey, &keyset, seed, unit, keysetAmounts)
 			if err != nil {

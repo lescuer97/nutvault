@@ -5,12 +5,15 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"nutmix_remote_signer/database"
+	"nutmix_remote_signer/signer"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
+
+const signerInfoKey = "signerInfo"
 
 func AuthMiddleware(db database.SqliteDB) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
@@ -40,8 +43,12 @@ func AuthMiddleware(db database.SqliteDB) grpc.UnaryServerInterceptor {
 		unitSha256 := sha256.Sum256([]byte(authToken.AccountId + authToken.Id))
 		derivationInteger := binary.BigEndian.Uint32(unitSha256[:4])
 
+		signerInfo := signer.SignerInfo{
+			AccountId:  authToken.AccountId,
+			Derivation: derivationInteger,
+		}
 		// Add user info to context
-		ctx = context.WithValue(ctx, "derivation", derivationInteger)
+		ctx = context.WithValue(ctx, signerInfoKey, signerInfo)
 
 		return handler(ctx, req)
 	}

@@ -21,7 +21,7 @@ type Seed struct {
 	Unit        string
 	Id          string
 	AccountId   string `db:"account_id"`
-	InputFeePpk uint `json:"input_fee_ppk" db:"input_fee_ppk"`
+	InputFeePpk uint   `json:"input_fee_ppk" db:"input_fee_ppk"`
 	Legacy      bool
 	Amounts     []uint64 `db:"amounts"`
 }
@@ -94,7 +94,7 @@ func (sq *SqliteDB) GetAllSeeds() ([]Seed, error) {
 
 func (sq *SqliteDB) GetSeedsByUnit(tx *sql.Tx, unit cashu.Unit) ([]Seed, error) {
 	seeds := []Seed{}
-		stmt, err := tx.Prepare("SELECT  created_at, active, version, unit, id, input_fee_ppk, legacy, amounts, account_id FROM seeds WHERE unit = $1")
+	stmt, err := tx.Prepare("SELECT  created_at, active, version, unit, id, input_fee_ppk, legacy, amounts, account_id FROM seeds WHERE unit = $1")
 	if err != nil {
 		return seeds, fmt.Errorf(`tx.Prepare("SELECT  created_at, active, version, unit, id, input_fee_ppk, legacy, max_order FROM seeds WHERE unit = $1"). %w`, err)
 	}

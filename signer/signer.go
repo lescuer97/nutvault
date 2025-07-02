@@ -41,9 +41,10 @@ type Signer struct {
 	signers map[string]IndividualSigner
 	db      database.SqliteDB
 }
+
 type SignerInfo struct {
-	accountId string
-	derivation uint32
+	AccountId  string
+	Derivation uint32
 }
 
 func ParseMakeysForIndividualSigner(signerInfo SignerInfo, seeds []database.Seed, masterKey *hdkeychain.ExtendedKey) (IndividualSigner, error) {
@@ -56,8 +57,10 @@ func ParseMakeysForIndividualSigner(signerInfo SignerInfo, seeds []database.Seed
 		return individualSigner, fmt.Errorf(`signer.GetKeysetsFromSeeds(seeds, masterKey). %w`, err)
 	}
 
+	
+
 	for _, seed := range seeds {
-		if seed.AccountId != signerInfo.accountId {
+		if seed.AccountId != signerInfo.AccountId {
 			log.Panicf("The accountId and the seed.AccountId should be the same. Something went really wrong")
 		}
 		for index, val := range seed.Amounts {
@@ -102,7 +105,7 @@ func SetupLocalSigner(db database.SqliteDB) (Signer, error) {
 	}
 
 	slog.Debug("Creating master key for derivation")
-	masterKey, err := hdkeychain.NewMaster(privateKey.Serialize(), &chaincfg.MainNetParams)
+	_, err = hdkeychain.NewMaster(privateKey.Serialize(), &chaincfg.MainNetParams)
 	if err != nil {
 		return signer, fmt.Errorf(" bip32.NewMasterKey(privateKey.Serialize()). %w", err)
 	}
@@ -111,15 +114,14 @@ func SetupLocalSigner(db database.SqliteDB) (Signer, error) {
 		slog.Debug("Cleaning up priv key variables")
 		seedFromDbus = ""
 		privateKey = nil
-		masterKey = nil
+		// masterKey = nil
 	}()
 
 	slog.Debug("Getting all the seeds from the database")
-	seeds, err := signer.db.GetAllSeeds()
+	_, err = signer.db.GetAllSeeds()
 	if err != nil {
 		return signer, fmt.Errorf("signer.db.GetAllSeeds(). %w", err)
 	}
-
 	// if len(seeds) == 0 {
 	// 	slog.Info("There are no seeds available.")
 	//
@@ -153,36 +155,15 @@ func SetupLocalSigner(db database.SqliteDB) (Signer, error) {
 	// }
 
 	slog.Debug("Generating keysets from seeds")
-	// keysets, activeKeysets, err := GetKeysetsFromSeeds(seeds, masterKey)
-	// if err != nil {
-	// 	return signer, fmt.Errorf(`signer.GetKeysetsFromSeeds(seeds, masterKey). %w`, err)
-	// }
-
-	// Parse the seeds to get the amounts indexes
-	// for _, seed := range seeds {
-	// 	for index, val := range seed.Amounts {
-	// 		_, exists := signer.keysetIndexes[seed.Id]
-	// 		if !exists {
-	// 			signer.keysetIndexes[seed.Id] = make(map[uint64]int)
-	// 			signer.keysetIndexes[seed.Id][val] = index
-	// 		} else {
-	// 			signer.keysetIndexes[seed.Id][val] = index
-	//
-	// 		}
-	// 	}
-	// }
 
 	slog.Debug("Setting keysets into the signer")
-	// signer.keysets = keysets
-	// signer.activeKeysets = activeKeysets
-	// signer.pubkey = privateKey.PubKey()
 
 	return signer, nil
 }
 
-func (l *Signer) GetKeysets(accountId string) ([]MintPublicKeyset, error) {
+func (l *Signer) GetKeysets(signerInfo SignerInfo) ([]MintPublicKeyset, error) {
 	response := []MintPublicKeyset{}
-	signer, exists := l.signers[accountId]
+	signer, exists := l.signers[signerInfo.AccountId]
 	if !exists {
 		return nil, fmt.Errorf("Account does not exists")
 
@@ -326,7 +307,7 @@ func (l *Signer) RotateKeyset(signerInfo SignerInfo, unit cashu.Unit, fee uint64
 		return newKey, fmt.Errorf(`tx.Commit(). %w`, err)
 	}
 
-	signer, exists := l.signers[signerInfo.accountId]
+	signer, exists := l.signers[signerInfo.AccountId]
 	if !exists {
 		return signer.keysets[newSeed.Id], fmt.Errorf("Account does not exists")
 	}
@@ -340,19 +321,19 @@ func (l *Signer) RotateKeyset(signerInfo SignerInfo, unit cashu.Unit, fee uint64
 	signer.keysets = keysets
 	signer.activeKeysets = activeKeysets
 
-	l.signers[signerInfo.accountId] = signer
+	l.signers[signerInfo.AccountId] = signer
 
 	signerMasterKey = nil
 	return signer.keysets[newSeed.Id], nil
 }
 
-func (l *Signer) SignBlindMessages(messages goNutsCashu.BlindedMessages, signerInfo SignerInfo,) (goNutsCashu.BlindedSignatures, error) {
+func (l *Signer) SignBlindMessages(messages goNutsCashu.BlindedMessages, signerInfo SignerInfo) (goNutsCashu.BlindedSignatures, error) {
 	var blindedSignatures goNutsCashu.BlindedSignatures
 
 	indexesForGeneration := make(KeysetGenerationIndexes)
 
 	slog.Debug("Finding account from the signer")
-	signer, exists := l.signers[signerInfo.accountId]
+	signer, exists := l.signers[signerInfo.AccountId]
 	if !exists {
 		return nil, fmt.Errorf("Account does not exists")
 	}
@@ -425,11 +406,11 @@ func (l *Signer) SignBlindMessages(messages goNutsCashu.BlindedMessages, signerI
 
 }
 
-func (l *Signer) VerifyProofs(accountId string, proofs goNutsCashu.Proofs, blindMessages goNutsCashu.BlindedMessages) error {
+func (l *Signer) VerifyProofs(signerInfo SignerInfo, proofs goNutsCashu.Proofs, blindMessages goNutsCashu.BlindedMessages) error {
 	indexesForGeneration := make(KeysetGenerationIndexes)
 
 	slog.Debug("Finding what amounts we need to create private keys for")
-	signer, exists := l.signers[accountId]
+	signer, exists := l.signers[signerInfo.AccountId]
 	if !exists {
 		return fmt.Errorf("Account does not exists")
 	}
@@ -451,7 +432,7 @@ func (l *Signer) VerifyProofs(accountId string, proofs goNutsCashu.Proofs, blind
 		}
 	}
 
-	keysets, err := l.GenerateMintKeysFromPublicKeysets(indexesForGeneration, accountId)
+	keysets, err := l.GenerateMintKeysFromPublicKeysets(indexesForGeneration, signerInfo)
 	defer func() {
 		keysets = nil
 	}()
@@ -516,8 +497,8 @@ func (l *Signer) validateProof(keysets map[string]MintKeyset, proof goNutsCashu.
 }
 
 // returns serialized compressed public key
-func (l *Signer) GetSignerPubkey(accountId string) ([]byte, error) {
-	signer, exists := l.signers[accountId]
+func (l *Signer) GetSignerPubkey(signerInfo SignerInfo) ([]byte, error) {
+	signer, exists := l.signers[signerInfo.AccountId]
 	if !exists {
 		return nil, fmt.Errorf("Account does not exists")
 
