@@ -177,19 +177,19 @@ func (sq *SqliteDB) SaveNewSeed(tx *sql.Tx, seed Seed) error {
 }
 
 func (sq *SqliteDB) UpdateSeedsActiveStatus(tx *sql.Tx, seeds []Seed) error {
+	// Prepare the statement once and reuse it
 	stmt, err := tx.Prepare("UPDATE seeds SET active = ? WHERE id = ?")
 	if err != nil {
-		return fmt.Errorf(`UPDATE seeds SET active = ? WHERE id = ?: %w`, err)
+		return fmt.Errorf("UPDATE seeds SET active = ? WHERE id = ?: %w", err)
 	}
 	defer stmt.Close()
 
 	for _, seed := range seeds {
-		_, err := stmt.Exec(seed.Active, seed.Id)
-		if err != nil {
-			return fmt.Errorf("stmt.Exec(seed.Active, seed.ID): %w", err)
+		// Exec with consistent field naming
+		if _, err = stmt.Exec(seed.Active, seed.Id); err != nil {
+			return fmt.Errorf("exec UpdateSeedsActiveStatus for seed ID %d: %w", seed.Id, err)
 		}
 	}
 
 	return nil
-
 }
