@@ -53,7 +53,7 @@ func MakeMintPublickeys(mintKey MintKeyset) MintPublicKeyset {
 func (s *Signer) GenerateMintKeysFromPublicKeysets(keysetIndex KeysetGenerationIndexes, signerInfo SignerInfo) (map[string]MintKeyset, error) {
 
 	privateKeysets := make(map[string]MintKeyset)
-	
+
 	bip85Master, err := s.getMasterBip85Key()
 	defer func() {
 		bip85Master = nil
@@ -61,24 +61,28 @@ func (s *Signer) GenerateMintKeysFromPublicKeysets(keysetIndex KeysetGenerationI
 	if err != nil {
 		return privateKeysets, fmt.Errorf("l.getMasterBip85Key(). %w", err)
 	}
-	derivedSignerKey, err := s.getDerivedMasterKey(bip85Master,signerInfo.Derivation)
+	derivedSignerKey, err := s.getDerivedMasterKey(bip85Master, signerInfo.Derivation)
 	defer func() {
 		derivedSignerKey = nil
 	}()
 	if err != nil {
-		return privateKeysets, fmt.Errorf("hdkeychain.NewMaster(derivedKey.Key, &chaincfg.MainNetParams). %w", err)
+		return privateKeysets, fmt.Errorf("s.getDerivedMasterKey(bip85Master,signerInfo.Derivation). %w", err)
 	}
 
 	slog.Debug(fmt.Sprintf("\n generating keys for %v keysets\n ", len(keysetIndex)))
+	log.Printf("signerInfo. %+v", signerInfo.AccountId)
 	signer, exists := s.signers[signerInfo.AccountId]
 	if !exists {
 		return privateKeysets, fmt.Errorf("signer account does not exists. %w", err)
 	}
+
+	log.Printf("keysetIndex: %+v", keysetIndex)
+	log.Printf("keysets: %+v", signer.keysets)
 	for i, val := range signer.keysets {
 
 		keysetAmounts, exists := keysetIndex[hex.EncodeToString(val.Id)]
 		if !exists {
-			return privateKeysets, fmt.Errorf("Could not find keyset form index. Id: %v. %w", val.Id, cashu.ErrKeysetNotFound)
+			return privateKeysets, fmt.Errorf("Could not find keyset from index. Id: %x. %w", val.Id, cashu.ErrKeysetNotFound)
 		}
 
 		hexId := hex.EncodeToString(val.Id)

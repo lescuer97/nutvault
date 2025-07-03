@@ -99,20 +99,32 @@ func SetupLocalSigner(db database.SqliteDB) (Signer, error) {
 	slog.Debug("Getting all account with seeds")
 	accountBySeeds, err := signer.db.GetAccountsWithSeeds()
 	if err != nil {
-		return signer, fmt.Errorf("signer.db.GetAllSeeds(). %w", err)
+		return signer, fmt.Errorf("signer.db.GetAccountsWithSeeds(). %w", err)
+	}
+
+	_, err = secp256k1.ParsePubKey(bip85Master.GetMasterKey().PublicKey().Key)
+	if err != nil {
+		log.Panicf("Could not get the public key for the signer master key")
 	}
 
 	signer.signers = make(map[string]IndividualSigner)
 	for i := range accountBySeeds {
 		// FIX:  verify signature of account
-		// accountBySeeds[i].VerifySignature()
+		// valid, err := accountBySeeds[i].VerifySignature(signerPublicKey)
+		// if err != nil {
+		// 	log.Panicf("Something happened while trying to verify the signature of the account. %+v", err)
+		// }
+		// if !valid {
+		// 	log.Panicf("signature for account is not valid. This should never happen. %+v", err)
+		//
+		// }
 
 		derivedSignerKey, err := signer.getDerivedMasterKey(bip85Master, accountBySeeds[i].Derivation)
 		defer func() {
 			derivedSignerKey = nil
 		}()
 		if err != nil {
-			return signer, fmt.Errorf("hdkeychain.NewMaster(derivedKey.Key, &chaincfg.MainNetParams). %w", err)
+			return signer, fmt.Errorf("signer.getDerivedMasterKey(bip85Master, accountBySeeds[i].Derivation). %w", err)
 		}
 
 		if len(accountBySeeds[i].Seeds) == 0 {
@@ -275,7 +287,7 @@ func (l *Signer) RotateKeyset(signerInfo SignerInfo, unit cashu.Unit, fee uint64
 		derivedSignerKey = nil
 	}()
 	if err != nil {
-		return newKey, fmt.Errorf("hdkeychain.NewMaster(derivedKey.Key, &chaincfg.MainNetParams). %w", err)
+		return newKey, fmt.Errorf("l.getDerivedMasterKey(bip85Master, signerInfo.Derivation). %w", err)
 	}
 
 	// Create New seed with one higher version
@@ -344,6 +356,7 @@ func (l *Signer) SignBlindMessages(messages goNutsCashu.BlindedMessages, signerI
 	if !exists {
 		return nil, fmt.Errorf("Account does not exists")
 	}
+	log.Printf("message: %+v", messages)
 	slog.Debug("Finding what amounts we need to create private keys for")
 	// get generation index from the stored index in the signer
 	for _, output := range messages {

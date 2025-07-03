@@ -1,44 +1,84 @@
 package database
 
 import (
+	"crypto/sha256"
 	"database/sql"
 	"fmt"
 	"log"
 	"time"
 
 	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4/schnorr"
 	"github.com/fxamacker/cbor/v2"
 )
 
 type Account struct {
-	Active bool   `json:"active"`
-	Npub   []byte `json:"npub"`
-	Id     string `json:"id"`
+	Active bool   `json:"active" cbor:"active"`
+	Npub   []byte `json:"npub"   cbor:"npub"`
+	Id     string `json:"id"     cbor:"id"`
 	// NOTE: derivation = sha256sum(npub + id)
-	Derivation uint32 `json:"derivation"`
-	CreatedAt  int64  `json:"created_at"`
-	Signature  []byte `json:"signature"`
+	Derivation uint32             `json:"derivation" cbor:"derivation"`
+	CreatedAt  int64              `json:"created_at" cbor:"created_at"`
+	Signature  *schnorr.Signature `json:"signature" cbor:"-"`
 }
 
-func (a *Account) VerifySignature(pubkey btcec.PublicKey) bool {
+func (a *Account) VerifySignature(pubkey btcec.PublicKey) (bool, error) {
+	msg, err := cbor.Marshal(a)
+	if err != nil {
+		return false, fmt.Errorf("cbor.Marshal(a). %w", err)
+	}
+	hash := sha256.Sum256(msg)
+	return a.Signature.Verify(hash[:], &pubkey), nil
+}
 
+func (a *Account) Sign(privKey *btcec.PrivateKey) error {
+	msg, err := cbor.Marshal(a)
+	if err != nil {
+		return fmt.Errorf("cbor.Marshal(a). %w", err)
+	}
+	hash := sha256.Sum256(msg)
+	signature, err := schnorr.Sign(privKey, hash[:])
+	if err != nil {
+		return fmt.Errorf("schnorr.Sign(privKey, hash[:]). %w", err)
+	}
+
+	a.Signature = signature
 	log.Panicf("need to implement Signature Verification")
-	return false
+	return nil
 }
 
 type AuthToken struct {
-	Id        string `json:"id"`
-	AccountId string `json:"account_id"`
-	Active    bool   `json:"active"`
-	Token     string `json:"token"`
-	CreatedAt int64  `json:"created_at"`
-	Signature []byte `json:"signature"`
+	Id        string             `json:"id" cbor:"id"`
+	AccountId string             `json:"account_id" cbor:"account_id"`
+	Active    bool               `json:"active" cbor:"active"`
+	Token     string             `json:"token" cbor:"token"`
+	CreatedAt int64              `json:"created_at" cbos:"created_at"`
+	Signature *schnorr.Signature `json:"signature" cbor:"-"`
 }
 
-func (a *AuthToken) VerifySignature(pubkey btcec.PublicKey) bool {
+func (a *AuthToken) VerifySignature(pubkey btcec.PublicKey) (bool, error) {
+	msg, err := cbor.Marshal(a)
+	if err != nil {
+		return false, fmt.Errorf("cbor.Marshal(a). %w", err)
+	}
+	hash := sha256.Sum256(msg)
+	return a.Signature.Verify(hash[:], &pubkey), nil
+}
 
+func (a *AuthToken) Sign(privKey *btcec.PrivateKey) error {
+	msg, err := cbor.Marshal(a)
+	if err != nil {
+		return fmt.Errorf("cbor.Marshal(a). %w", err)
+	}
+	hash := sha256.Sum256(msg)
+	signature, err := schnorr.Sign(privKey, hash[:])
+	if err != nil {
+		return fmt.Errorf("schnorr.Sign(privKey, hash[:]). %w", err)
+	}
+
+	a.Signature = signature
 	log.Panicf("need to implement Signature Verification")
-	return false
+	return nil
 }
 
 func (s *SqliteDB) CreateAccount(account *Account) error {
@@ -48,18 +88,7 @@ func (s *SqliteDB) CreateAccount(account *Account) error {
 	}
 	defer stmt.Close()
 
-	_, err = stmt.Exec(account.Active, account.Npub, account.Id, account.Derivation, time.Now().Unix(), account.Signature)
-	return err
-}
-
-func (s *SqliteDB) CreateAuthToken(authToken *AuthToken) error {
-	stmt, err := s.Db.Prepare("INSERT INTO auth_tokens (id, account_id, active, token, created_at, signature) VALUES (?, ?, ?, ?, ?, ?)")
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-
-	_, err = stmt.Exec(authToken.Id, authToken.AccountId, authToken.Active, authToken.Token, time.Now().Unix(), authToken.Signature)
+	_, err = stmt.Exec(account.Active, account.Npub, account.Id, account.Derivation, time.Now().Unix(), account.Signature.Serialize())
 	return err
 }
 
@@ -89,10 +118,36 @@ func (s *SqliteDB) GetAccountById(id string) (*Account, error) {
 	row := s.Db.QueryRow("SELECT active, npub, id, derivation, created_at, signature FROM accounts WHERE id = ?", id)
 
 	var account Account
-	err := row.Scan(&account.Active, &account.Npub, &account.Id, &account.Derivation, &account.CreatedAt, &account.Signature)
+	var sigBytes []byte
+	err := row.Scan(&account.Active, &account.Npub, &account.Id, &account.Derivation, &account.CreatedAt, &sigBytes)
 	if err != nil {
 		return nil, err
 	}
+
+	// FIX: Uncomment signature setup and fix signature
+	// sig, err := schnorr.ParseSignature(sigBytes)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("schnorr.ParseSignature(sigBytes). %w", err)
+	// }
+	//authToken.Signature = nil
+
+	return &account, nil
+}
+func (s *SqliteDB) GetAccountByNpub(npub []byte) (*Account, error) {
+	row := s.Db.QueryRow("SELECT active, npub, id, derivation, created_at, signature FROM accounts WHERE npub = ?", npub)
+
+	var account Account
+	var sigBytes []byte
+	err := row.Scan(&account.Active, &account.Npub, &account.Id, &account.Derivation, &account.CreatedAt, &sigBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	sig, err := schnorr.ParseSignature(sigBytes)
+	if err != nil {
+		return nil, fmt.Errorf("schnorr.ParseSignature(sigBytes). %w", err)
+	}
+	account.Signature = sig
 
 	return &account, nil
 }
@@ -101,40 +156,54 @@ func (s *SqliteDB) GetAuthTokenById(id string) (*AuthToken, error) {
 	row := s.Db.QueryRow("SELECT id, account_id, active, token, created_at, signature FROM auth_tokens WHERE id = ?", id)
 
 	var authToken AuthToken
-	err := row.Scan(&authToken.Id, &authToken.AccountId, &authToken.Active, &authToken.Token, &authToken.CreatedAt, &authToken.Signature)
+	var sigBytes []byte
+	err := row.Scan(&authToken.Id, &authToken.AccountId, &authToken.Active, &authToken.Token, &authToken.CreatedAt, &sigBytes)
 	if err != nil {
 		return nil, err
 	}
+	// FIX: Uncomment signature setup and fix signature
+	// sig, err := schnorr.ParseSignature(sigBytes)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("schnorr.ParseSignature(sigBytes). %w", err)
+	// }
+	authToken.Signature = nil
 
 	return &authToken, nil
-}
-
-func (s *SqliteDB) GetAccountByNpub(npub []byte) (*Account, error) {
-	row := s.Db.QueryRow("SELECT active, npub, id, derivation, created_at, signature FROM accounts WHERE npub = ?", npub)
-
-	var account Account
-	err := row.Scan(&account.Active, &account.Npub, &account.Id, &account.Derivation, &account.CreatedAt, &account.Signature)
-	if err != nil {
-		return nil, err
-	}
-
-	return &account, nil
 }
 
 func (s *SqliteDB) GetAuthTokenByToken(token string) (*AuthToken, error) {
 	row := s.Db.QueryRow("SELECT id, account_id, active, token, created_at, signature FROM auth_tokens WHERE token = ?", token)
 
 	var authToken AuthToken
-	err := row.Scan(&authToken.Id, &authToken.AccountId, &authToken.Active, &authToken.Token, &authToken.CreatedAt, &authToken.Signature)
+	var sigBytes []byte
+	err := row.Scan(&authToken.Id, &authToken.AccountId, &authToken.Active, &authToken.Token, &authToken.CreatedAt, &sigBytes)
 	if err != nil {
 		return nil, err
 	}
+	// FIX: Uncomment signature setup and fix signature
+	// sig, err := schnorr.ParseSignature(sigBytes)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("schnorr.ParseSignature(sigBytes). %w", err)
+	// }
+	authToken.Signature = nil
+	// authToken.Signature = sig
 
 	return &authToken, nil
 }
 
+func (s *SqliteDB) CreateAuthToken(authToken *AuthToken) error {
+	stmt, err := s.Db.Prepare("INSERT INTO auth_tokens (id, account_id, active, token, created_at, signature) VALUES (?, ?, ?, ?, ?, ?)")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(authToken.Id, authToken.AccountId, authToken.Active, authToken.Token, time.Now().Unix(), authToken.Signature.Serialize())
+	return err
+}
+
 type AccountWithSeeds struct {
-	Account
+	*Account
 	Seeds []Seed `json:"seeds"`
 }
 
@@ -163,18 +232,24 @@ func (s *SqliteDB) GetAccountsWithSeeds() ([]AccountWithSeeds, error) {
 		var seedUnit, seedId, seedAmounts, seedAccountId sql.NullString
 		var seedCreatedAt, seedInputFeePpk, seedVersion sql.NullInt64
 		var seedLegacy sql.NullBool
-
+		var sigBytes []byte
 		err := rows.Scan(
-			&account.Active, &account.Npub, &account.Id, &account.Derivation, &account.CreatedAt, &account.Signature,
+			&account.Active, &account.Npub, &account.Id, &account.Derivation, &account.CreatedAt, &sigBytes,
 			&seedActive, &seedUnit, &seedId, &seedCreatedAt, &seedInputFeePpk, &seedVersion, &seedLegacy, &seedAmounts, &seedAccountId,
 		)
 		if err != nil {
 			return nil, err
 		}
+		// FIX: Uncomment signature setup and fix signature
+		// sig, err := schnorr.ParseSignature(sigBytes)
+		// if err != nil {
+		// 	return nil, fmt.Errorf("schnorr.ParseSignature(sigBytes). %w", err)
+		// }
+		account.Signature = nil
 
 		if _, ok := accountsMap[account.Id]; !ok {
 			accountsMap[account.Id] = &AccountWithSeeds{
-				Account: account,
+				Account: &account,
 				Seeds:   []Seed{},
 			}
 		}

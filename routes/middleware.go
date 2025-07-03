@@ -2,6 +2,7 @@ package routes
 
 import (
 	"context"
+	"log/slog"
 	"nutmix_remote_signer/database"
 	"nutmix_remote_signer/signer"
 
@@ -31,11 +32,13 @@ func AuthMiddleware(db database.SqliteDB) grpc.UnaryServerInterceptor {
 
 		authToken, err := db.GetAuthTokenByToken(token)
 		if err != nil {
+			slog.Warn("error getting a token", slog.String("error", err.Error()))
 			return nil, status.Error(codes.Unauthenticated, "Token does not exists")
 		}
 
 		account, err := db.GetAccountById(authToken.AccountId)
 		if err != nil {
+			slog.Warn("Could not get account", slog.String("error", err.Error()))
 			return nil, status.Error(codes.Unauthenticated, "acccount does not exists")
 		}
 		if account == nil {
