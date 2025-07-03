@@ -77,7 +77,7 @@ func TestDeriveKeysetSat(t *testing.T) {
 		Id:          "",
 		InputFeePpk: 0,
 		Legacy:      false,
-		Amounts:   GetAmountsFromMaxOrder(DefaultMaxOrder),
+		Amounts:     GetAmountsFromMaxOrder(DefaultMaxOrder),
 	}
 	privateKeyBytes, err := hex.DecodeString(MintPrivateKey)
 	if err != nil {
@@ -185,7 +185,7 @@ func TestDeriveKeysetAuth(t *testing.T) {
 		Id:          "",
 		InputFeePpk: 0,
 		Legacy:      false,
-		Amounts:   GetAmountsFromMaxOrder(DefaultMaxOrder),
+		Amounts:     GetAmountsFromMaxOrder(DefaultMaxOrder),
 	}
 	privateKeyBytes, err := hex.DecodeString(MintPrivateKey)
 	if err != nil {

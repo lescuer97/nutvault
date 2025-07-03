@@ -258,7 +258,14 @@ func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint64, amounts []uint64) (Mi
 	// Parse the seeds to get the amounts indexes
 	for _, seed := range seeds {
 		for index, val := range seed.Amounts {
-			l.keysetIndexes[seed.Id][val] = index
+			_, exists := l.keysetIndexes[seed.Id]
+			if !exists {
+				l.keysetIndexes[seed.Id] = make(map[uint64]int)
+				l.keysetIndexes[seed.Id][val] = index
+			} else {
+				l.keysetIndexes[seed.Id][val] = index
+
+			}
 		}
 	}
 

@@ -84,7 +84,7 @@ func (s *Signer) GenerateMintKeysFromPublicKeysets(keysetIndex KeysetGenerationI
 
 		keysetAmounts, exists := keysetIndex[hex.EncodeToString(val.Id)]
 		if !exists {
-			return privateKeysets, fmt.Errorf("Could not find keyset form index. Id: %v. %w", val.Id, cashu.ErrKeysetNotFound)
+			continue
 		}
 
 		hexId := hex.EncodeToString(val.Id)

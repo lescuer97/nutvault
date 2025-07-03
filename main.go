@@ -17,6 +17,7 @@ import (
 )
 
 const abstractSocket = "@signer_socket"
+
 func main() {
 	err := godotenv.Load()
 	if err != nil {

@@ -93,7 +93,7 @@ func (sq *SqliteDB) GetAllSeeds() ([]Seed, error) {
 
 func (sq *SqliteDB) GetSeedsByUnit(tx *sql.Tx, unit cashu.Unit) ([]Seed, error) {
 	seeds := []Seed{}
-	stmt, err := tx.Prepare("SELECT  created_at, active, version, unit, id, input_fee_ppk, legacy, max_order FROM seeds WHERE unit = $1")
+	stmt, err := tx.Prepare("SELECT  created_at, active, version, unit, id, input_fee_ppk, legacy, amounts FROM seeds WHERE unit = $1")
 	if err != nil {
 		return seeds, fmt.Errorf(`tx.Prepare("SELECT  created_at, active, version, unit, id, input_fee_ppk, legacy, max_order FROM seeds WHERE unit = $1"). %w`, err)
 	}
@@ -131,7 +131,6 @@ func (sq *SqliteDB) SaveNewSeed(tx *sql.Tx, seed Seed) error {
 	}
 	for {
 		tries += 1
-
 		_, err := tx.Exec("INSERT INTO seeds ( active, created_at, unit, id, version, input_fee_ppk, legacy, amounts) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)", seed.Active, seed.CreatedAt, seed.Unit, seed.Id, seed.Version, seed.InputFeePpk, seed.Legacy, string(amounts))
 
 		switch {
@@ -147,19 +146,19 @@ func (sq *SqliteDB) SaveNewSeed(tx *sql.Tx, seed Seed) error {
 }
 
 func (sq *SqliteDB) UpdateSeedsActiveStatus(tx *sql.Tx, seeds []Seed) error {
+	// Prepare the statement once and reuse it
 	stmt, err := tx.Prepare("UPDATE seeds SET active = ? WHERE id = ?")
 	if err != nil {
-		return fmt.Errorf(`UPDATE seeds SET active = ? WHERE id = ?: %w`, err)
+		return fmt.Errorf("UPDATE seeds SET active = ? WHERE id = ?: %w", err)
 	}
 	defer stmt.Close()
 
 	for _, seed := range seeds {
-		_, err := stmt.Exec(seed.Active, seed.Id)
-		if err != nil {
-			return fmt.Errorf("stmt.Exec(seed.Active, seed.ID): %w", err)
+		// Exec with consistent field naming
+		if _, err = stmt.Exec(seed.Active, seed.Id); err != nil {
+			return fmt.Errorf("exec UpdateSeedsActiveStatus for seed ID %d: %w", seed.Id, err)
 		}
 	}
 
 	return nil
-
 }
