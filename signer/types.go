@@ -70,19 +70,16 @@ func (s *Signer) GenerateMintKeysFromPublicKeysets(keysetIndex KeysetGenerationI
 	}
 
 	slog.Debug(fmt.Sprintf("\n generating keys for %v keysets\n ", len(keysetIndex)))
-	log.Printf("signerInfo. %+v", signerInfo.AccountId)
 	signer, exists := s.signers[signerInfo.AccountId]
 	if !exists {
 		return privateKeysets, fmt.Errorf("signer account does not exists. %w", err)
 	}
-
-	log.Printf("keysetIndex: %+v", keysetIndex)
-	log.Printf("keysets: %+v", signer.keysets)
+	slog.Info("Received Keyset Generation", slog.String("account", signerInfo.AccountId))
 	for i, val := range signer.keysets {
 
 		keysetAmounts, exists := keysetIndex[hex.EncodeToString(val.Id)]
 		if !exists {
-			return privateKeysets, fmt.Errorf("Could not find keyset from index. Id: %x. %w", val.Id, cashu.ErrKeysetNotFound)
+			continue
 		}
 
 		hexId := hex.EncodeToString(val.Id)

@@ -272,9 +272,7 @@ func (l *Signer) RotateKeyset(signerInfo SignerInfo, unit cashu.Unit, fee uint64
 		seeds[i].Active = false
 	}
 
-	log.Printf("\n seeds: %+v", seeds)
 	slog.Info(fmt.Sprintf("Current hightest seed. Version: %v. Id: %s", highestSeed.Version, highestSeed.Id))
-
 	bip85Master, err := l.getMasterBip85Key()
 	defer func() {
 		bip85Master = nil
@@ -356,7 +354,6 @@ func (l *Signer) SignBlindMessages(messages goNutsCashu.BlindedMessages, signerI
 	if !exists {
 		return nil, fmt.Errorf("Account does not exists")
 	}
-	log.Printf("message: %+v", messages)
 	slog.Debug("Finding what amounts we need to create private keys for")
 	// get generation index from the stored index in the signer
 	for _, output := range messages {
