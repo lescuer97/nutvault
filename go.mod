@@ -12,10 +12,11 @@ require (
 	github.com/godbus/dbus/v5 v5.1.0
 	github.com/jackc/pgx/v5 v5.7.3
 	github.com/joho/godotenv v1.5.1
-	github.com/lescuer97/bip85 v0.1.1
+	github.com/lescuer97/bip85 v0.1.2
 	github.com/lescuer97/nutmix v0.0.0-20250316134157-6b582d582f1c
 	github.com/mattn/go-sqlite3 v1.14.22
 	github.com/pressly/goose/v3 v3.20.0
+	github.com/tyler-smith/go-bip32 v1.0.0
 	github.com/tyler-smith/go-bip39 v1.1.0
 	google.golang.org/grpc v1.64.1
 	google.golang.org/protobuf v1.34.1
@@ -30,7 +31,6 @@ require (
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/mfridman/interpolate v0.0.2 // indirect
 	github.com/sethvargo/go-retry v0.2.4 // indirect
-	github.com/tyler-smith/go-bip32 v1.0.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/crypto v0.39.0 // indirect

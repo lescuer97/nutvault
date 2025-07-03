@@ -2,7 +2,6 @@ package signer
 
 import (
 	"fmt"
-	"log"
 	"log/slog"
 
 	"github.com/godbus/dbus/v5"
@@ -17,7 +16,7 @@ type SecretStructure struct {
 
 // GetNutmixSignerKey retrieves the secret key for the nutmix-remote-signer application
 // from the system's secret service (libsecret) via DBus
-func GetNutmixSignerKey() (string, error) {
+func getNutmixSignerKey() (string, error) {
 	slog.Debug("connecting to dbus")
 	// Connect to the session bus
 	conn, err := dbus.ConnectSessionBus()
@@ -77,7 +76,6 @@ func GetNutmixSignerKey() (string, error) {
 
 		// Convert the secret value to a string
 		secretValue := string(secretStruct.Value)
-		log.Printf("secretValue: %+v", secretValue)
 		return secretValue, nil
 	}
 

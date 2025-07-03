@@ -7,10 +7,7 @@ import (
 	"log/slog"
 	"nutmix_remote_signer/database"
 
-	"github.com/btcsuite/btcd/btcutil/hdkeychain"
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/elnosh/gonuts/crypto"
-	"github.com/lescuer97/bip85"
 	"github.com/lescuer97/nutmix/api/cashu"
 )
 
@@ -56,44 +53,20 @@ func MakeMintPublickeys(mintKey MintKeyset) MintPublicKeyset {
 func (s *Signer) GenerateMintKeysFromPublicKeysets(keysetIndex KeysetGenerationIndexes, signerInfo SignerInfo) (map[string]MintKeyset, error) {
 
 	privateKeysets := make(map[string]MintKeyset)
-	seedFromDBUS, err := GetNutmixSignerKey()
+	
+	bip85Master, err := s.getMasterBip85Key()
 	defer func() {
-		seedFromDBUS = ""
+		bip85Master = nil
 	}()
 	if err != nil {
-		return privateKeysets, fmt.Errorf("signer.getSignerPrivateKey(). %w", err)
+		return privateKeysets, fmt.Errorf("l.getMasterBip85Key(). %w", err)
 	}
-
-	privateKey, err := s.getSignerBip32PrivateKey(seedFromDBUS)
+	derivedSignerKey, err := s.getDerivedMasterKey(bip85Master,signerInfo.Derivation)
 	defer func() {
-		privateKey = nil
+		derivedSignerKey = nil
 	}()
 	if err != nil {
-		return privateKeysets, fmt.Errorf("signer.getSignerPrivateKey(). %w", err)
-	}
-
-	bip85Key, err := bip85.NewBip85FromBip32Key(privateKey)
-	defer func() {
-		bip85Key = nil
-	}()
-	if err != nil {
-		return privateKeysets, fmt.Errorf("bip85.NewBip85FromBip32Key(privateKey). %w", err)
-	}
-
-	derivedKey, err := bip85Key.DeriveToXpriv(signerInfo.Derivation)
-	defer func() {
-		derivedKey = nil
-	}()
-	if err != nil {
-		return privateKeysets, fmt.Errorf("bip85Key.DeriveToXpriv(signerInfo.derivation). %w", err)
-	}
-
-	mintKey, err := hdkeychain.NewMaster(derivedKey.Key, &chaincfg.MainNetParams)
-	defer func() {
-		mintKey = nil
-	}()
-	if err != nil {
-		return privateKeysets, fmt.Errorf(" bip32.NewMasterKey(privateKey.Serialize()). %w", err)
+		return privateKeysets, fmt.Errorf("hdkeychain.NewMaster(derivedKey.Key, &chaincfg.MainNetParams). %w", err)
 	}
 
 	slog.Debug(fmt.Sprintf("\n generating keys for %v keysets\n ", len(keysetIndex)))
@@ -119,12 +92,12 @@ func (s *Signer) GenerateMintKeysFromPublicKeysets(keysetIndex KeysetGenerationI
 
 		seed := database.Seed{Active: val.Active, Id: hexId, Unit: val.Unit, Version: int(val.DerivationPathIdx), InputFeePpk: val.InputFeePpk, Legacy: val.Legacy, AccountId: signerInfo.AccountId}
 		if val.Legacy {
-			err := LegacyKeyDerivation(mintKey, &keyset, seed, unit, keysetAmounts)
+			err := LegacyKeyDerivation(derivedSignerKey, &keyset, seed, unit, keysetAmounts)
 			if err != nil {
 				return privateKeysets, fmt.Errorf("LegacyKeyDerivation(mintKey,&keyset, seed, unit ) %w", err)
 			}
 		} else {
-			err := KeyDerivation(mintKey, &keyset, seed, unit, keysetAmounts)
+			err := KeyDerivation(derivedSignerKey, &keyset, seed, unit, keysetAmounts)
 			if err != nil {
 				return privateKeysets, fmt.Errorf("KeyDerivation(mintKey,&keyset, seed, unit) %w", err)
 			}

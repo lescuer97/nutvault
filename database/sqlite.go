@@ -122,8 +122,37 @@ func (sq *SqliteDB) GetSeedsByUnit(tx *sql.Tx, unit cashu.Unit) ([]Seed, error) 
 	}
 	return seeds, nil
 }
-func (sq *SqliteDB) SaveNewSeed(tx *sql.Tx, seed Seed) error {
+func (sq *SqliteDB) GetSeedsByAccountId(tx *sql.Tx, accountId string) ([]Seed, error) {
+	seeds := []Seed{}
+	stmt, err := tx.Prepare("SELECT  created_at, active, version, unit, id, input_fee_ppk, legacy, amounts, account_id FROM seeds WHERE account_id = $1")
+	if err != nil {
+		return seeds, fmt.Errorf(`tx.Prepare("SELECT  created_at, active, version, unit, id, input_fee_ppk, legacy, max_order FROM seeds WHERE unit = $1"). %w`, err)
+	}
+	defer stmt.Close()
 
+	rows, err := stmt.Query(accountId)
+	if err != nil {
+		return seeds, fmt.Errorf(`stmt.Query(args...). %w`, err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var seed Seed
+		amountsStr := ""
+		err = rows.Scan(&seed.CreatedAt, &seed.Active, &seed.Version, &seed.Unit, &seed.Id, &seed.InputFeePpk, &seed.Legacy, &amountsStr, &seed.AccountId)
+		if err != nil {
+			return seeds, fmt.Errorf(`rows.Scan(&seed.CreatedAt, &seed.Active, &seed.Version, &seed.Unit, &seed.Id, &seed.InputFeePpk, &seed.Legacy, &seed.MaxOrder) %w`, err)
+		}
+		err := cbor.Unmarshal([]byte(amountsStr), &seed.Amounts)
+		if err != nil {
+			return seeds, fmt.Errorf(`cbor.Unmarshal( []byte(amountsStr), &seed.Amounts) %w`, err)
+		}
+
+		seeds = append(seeds, seed)
+	}
+	return seeds, nil
+}
+func (sq *SqliteDB) SaveNewSeed(tx *sql.Tx, seed Seed) error {
 	tries := 0
 	amounts, err := cbor.Marshal(seed.Amounts)
 	if err != nil {

@@ -22,9 +22,8 @@ import (
 	"github.com/elnosh/gonuts/cashu/nuts/nut14"
 	"github.com/elnosh/gonuts/crypto"
 	"github.com/jackc/pgx/v5"
+	"github.com/lescuer97/bip85"
 	"github.com/lescuer97/nutmix/api/cashu"
-	"github.com/tyler-smith/go-bip32"
-	"github.com/tyler-smith/go-bip39"
 )
 
 type KeysetGenerationIndexes map[string]map[uint64]int
@@ -47,21 +46,19 @@ type SignerInfo struct {
 	Derivation uint32
 }
 
-func ParseMakeysForIndividualSigner(signerInfo SignerInfo, seeds []database.Seed, masterKey *hdkeychain.ExtendedKey) (IndividualSigner, error) {
+func ParseMakeysForIndividualSigner(accountWithSeeds database.AccountWithSeeds, masterKey *hdkeychain.ExtendedKey) (IndividualSigner, error) {
 	individualSigner := IndividualSigner{
 		keysetIndexes: make(KeysetGenerationIndexes),
 	}
 
-	keysets, activeKeysets, err := GetKeysetsFromSeeds(seeds, masterKey)
+	keysets, activeKeysets, err := GetKeysetsFromSeeds(accountWithSeeds.Seeds, masterKey)
 	if err != nil {
 		return individualSigner, fmt.Errorf(`signer.GetKeysetsFromSeeds(seeds, masterKey). %w`, err)
 	}
 
-	
-
-	for _, seed := range seeds {
-		if seed.AccountId != signerInfo.AccountId {
-			log.Panicf("The accountId and the seed.AccountId should be the same. Something went really wrong")
+	for _, seed := range accountWithSeeds.Seeds {
+		if accountWithSeeds.Id == seed.Id {
+			log.Panicf("Account id is not the same that is the seed Id")
 		}
 		for index, val := range seed.Amounts {
 			_, exists := individualSigner.keysetIndexes[seed.Id]
@@ -70,7 +67,6 @@ func ParseMakeysForIndividualSigner(signerInfo SignerInfo, seeds []database.Seed
 				individualSigner.keysetIndexes[seed.Id][val] = index
 			} else {
 				individualSigner.keysetIndexes[seed.Id][val] = index
-
 			}
 		}
 	}
@@ -92,72 +88,70 @@ func SetupLocalSigner(db database.SqliteDB) (Signer, error) {
 		db: db,
 	}
 	slog.Info("Trying to get the Mint key")
-
-	// mint_privkey := os.Getenv("MINT_PRIVATE_KEY")
-	seedFromDbus, err := GetNutmixSignerKey()
-	if err != nil {
-		return signer, fmt.Errorf("signer.getSignerPrivateKey(). %w", err)
-	}
-
-	privateKey, err := signer.getSignerPrivateKey(seedFromDbus)
-	if err != nil {
-		return signer, fmt.Errorf("signer.getSignerPrivateKey(). %w", err)
-	}
-
-	slog.Debug("Creating master key for derivation")
-	_, err = hdkeychain.NewMaster(privateKey.Serialize(), &chaincfg.MainNetParams)
-	if err != nil {
-		return signer, fmt.Errorf(" bip32.NewMasterKey(privateKey.Serialize()). %w", err)
-	}
-
+	bip85Master, err := signer.getMasterBip85Key()
 	defer func() {
-		slog.Debug("Cleaning up priv key variables")
-		seedFromDbus = ""
-		privateKey = nil
-		// masterKey = nil
+		bip85Master = nil
 	}()
+	if err != nil {
+		return signer, fmt.Errorf("l.getMasterBip85Key(). %w", err)
+	}
 
-	slog.Debug("Getting all the seeds from the database")
-	_, err = signer.db.GetAllSeeds()
+	slog.Debug("Getting all account with seeds")
+	accountBySeeds, err := signer.db.GetAccountsWithSeeds()
 	if err != nil {
 		return signer, fmt.Errorf("signer.db.GetAllSeeds(). %w", err)
 	}
-	// if len(seeds) == 0 {
-	// 	slog.Info("There are no seeds available.")
-	//
-	// 	slog.Debug("Generating amounts for new seed")
-	//
-	// 	amounts := GetAmountsFromMaxOrder(DefaultMaxOrder)
-	//
-	// 	slog.Info("Creating a new seed")
-	// 	newSeed, err := signer.createNewSeed(masterKey, cashu.Sat, 1, 0, amounts)
-	//
-	// 	if err != nil {
-	// 		return signer, fmt.Errorf("signer.createNewSeed(masterKey, 1, 0). %w", err)
-	// 	}
-	//
-	// 	tx, err := db.Db.Begin()
-	// 	if err != nil {
-	// 		return signer, fmt.Errorf("l.db.GetTx(ctx). %w", err)
-	// 	}
-	// 	defer tx.Rollback()
-	//
-	// 	slog.Info("Saving seed for to the database")
-	// 	err = db.SaveNewSeed(tx, newSeed)
-	// 	if err != nil {
-	// 		return signer, fmt.Errorf("db.SaveNewSeeds([]cashu.Seed{newSeed}). %w", err)
-	// 	}
-	// 	err = tx.Commit()
-	// 	if err != nil {
-	// 		return signer, fmt.Errorf(`tx.Commit(). %w`, err)
-	// 	}
-	// 	seeds = append(seeds, newSeed)
-	// }
 
-	slog.Debug("Generating keysets from seeds")
+	signer.signers = make(map[string]IndividualSigner)
+	for i := range accountBySeeds {
+		// FIX:  verify signature of account
+		// accountBySeeds[i].VerifySignature()
 
-	slog.Debug("Setting keysets into the signer")
+		derivedSignerKey, err := signer.getDerivedMasterKey(bip85Master, accountBySeeds[i].Derivation)
+		defer func() {
+			derivedSignerKey = nil
+		}()
+		if err != nil {
+			return signer, fmt.Errorf("hdkeychain.NewMaster(derivedKey.Key, &chaincfg.MainNetParams). %w", err)
+		}
 
+		if len(accountBySeeds[i].Seeds) == 0 {
+			slog.Info("There are no seeds available. For signer", slog.String("signerId", accountBySeeds[i].Id))
+			slog.Debug("Generating amounts for new seed")
+			amounts := GetAmountsFromMaxOrder(DefaultMaxOrder)
+			slog.Info("Creating a new seed")
+			newSeed, err := signer.createNewSeed(derivedSignerKey, cashu.Sat, 1, 0, amounts)
+			if err != nil {
+				return signer, fmt.Errorf("signer.createNewSeed(masterKey, 1, 0). %w", err)
+			}
+
+			newSeed.AccountId = accountBySeeds[i].Id
+			tx, err := db.Db.Begin()
+			if err != nil {
+				return signer, fmt.Errorf("l.db.GetTx(ctx). %w", err)
+			}
+			defer tx.Rollback()
+
+			slog.Info("Saving seed for to the database")
+			err = db.SaveNewSeed(tx, newSeed)
+			if err != nil {
+				return signer, fmt.Errorf("db.SaveNewSeeds([]cashu.Seed{newSeed}). %w", err)
+			}
+			err = tx.Commit()
+			if err != nil {
+				return signer, fmt.Errorf(`tx.Commit(). %w`, err)
+			}
+
+			accountBySeeds[i].Seeds = append(accountBySeeds[i].Seeds, newSeed)
+		}
+
+		individualSigner, err := ParseMakeysForIndividualSigner(accountBySeeds[i], derivedSignerKey)
+		if err != nil {
+			return signer, fmt.Errorf("ParseMakeysForIndividualSigner(accountBySeeds[i], masterKey). %w", err)
+		}
+
+		signer.signers[accountBySeeds[i].Id] = individualSigner
+	}
 	return signer, nil
 }
 
@@ -175,27 +169,36 @@ func (l *Signer) GetKeysets(signerInfo SignerInfo) ([]MintPublicKeyset, error) {
 	return response, nil
 }
 
-func (l *Signer) getSignerPrivateKey(seed string) (*secp256k1.PrivateKey, error) {
-	slog.Debug("parsing private_key")
-	seedBytes, err := bip39.EntropyFromMnemonic(seed)
+func (l *Signer) getMasterBip85Key() (*bip85.Bip85, error) {
+	seedFromDBUS, err := getNutmixSignerKey()
+	defer func() {
+		seedFromDBUS = ""
+	}()
 	if err != nil {
-		return nil, fmt.Errorf(`bip39.EntropyFromMnemonic(seed). %w`, err)
-	}
-	mintKey := secp256k1.PrivKeyFromBytes(seedBytes)
-	return mintKey, nil
-}
-func (l *Signer) getSignerBip32PrivateKey(seed string) (*bip32.Key, error) {
-	slog.Debug("parsing private_key")
-	seedBytes, err := bip39.EntropyFromMnemonic(seed)
-	if err != nil {
-		return nil, fmt.Errorf(`bip39.EntropyFromMnemonic(seed). %w`, err)
+		return nil, fmt.Errorf("signer.getSignerPrivateKey(). %w", err)
 	}
 
-	mintKey, err := bip32.NewMasterKey(seedBytes)
+	bip85Key, err := bip85.NewBip85FromMnemonic(seedFromDBUS, "")
 	if err != nil {
-		return nil, fmt.Errorf(`bip32.NewMasterKey(seedBytes). %w`, err)
+		return nil, fmt.Errorf("bip85.NewBip85FromBip32Key(privateKey). %w", err)
 	}
-	return mintKey, nil
+	return bip85Key, nil
+}
+
+func (l *Signer) getDerivedMasterKey(bip85Key *bip85.Bip85, derivation uint32) (*hdkeychain.ExtendedKey, error) {
+	derivedKey, err := bip85Key.DeriveToXpriv(derivation)
+	defer func() {
+		derivedKey = nil
+	}()
+	if err != nil {
+		return nil, fmt.Errorf("bip85Key.DeriveToXpriv(signerInfo.derivation). %w", err)
+	}
+
+	derivedSignerKey, err := hdkeychain.NewMaster(derivedKey.Key, &chaincfg.MainNetParams)
+	if err != nil {
+		return nil, fmt.Errorf("hdkeychain.NewMaster(derivedKey.Key, &chaincfg.MainNetParams). %w", err)
+	}
+	return derivedSignerKey, nil
 }
 
 func (l *Signer) createNewSeed(mintPrivateKey *hdkeychain.ExtendedKey, unit cashu.Unit, version int, fee uint, amounts []uint64) (database.Seed, error) {
@@ -242,7 +245,7 @@ func (l *Signer) RotateKeyset(signerInfo SignerInfo, unit cashu.Unit, fee uint64
 	// get current highest seed version
 	var highestSeed database.Seed = database.Seed{Version: 0}
 	slog.Debug("Getting seed from unit", slog.String("unit", unit.String()))
-	seeds, err := l.db.GetSeedsByUnit(tx, unit)
+	seeds, err := l.db.GetSeedsByAccountId(tx, signerInfo.AccountId)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return newKey, fmt.Errorf("database.GetSeedsByUnit(tx, unit). %w", err)
@@ -257,29 +260,30 @@ func (l *Signer) RotateKeyset(signerInfo SignerInfo, unit cashu.Unit, fee uint64
 		seeds[i].Active = false
 	}
 
+	log.Printf("\n seeds: %+v", seeds)
 	slog.Info(fmt.Sprintf("Current hightest seed. Version: %v. Id: %s", highestSeed.Version, highestSeed.Id))
 
-	seedFromDBUS, err := GetNutmixSignerKey()
+	bip85Master, err := l.getMasterBip85Key()
+	defer func() {
+		bip85Master = nil
+	}()
 	if err != nil {
-		return newKey, fmt.Errorf("signer.getSignerPrivateKey(). %w", err)
+		return newKey, fmt.Errorf("l.getMasterBip85Key(). %w", err)
 	}
-
-	mintPrivateKey, err := l.getSignerPrivateKey(seedFromDBUS)
+	derivedSignerKey, err := l.getDerivedMasterKey(bip85Master, signerInfo.Derivation)
+	defer func() {
+		derivedSignerKey = nil
+	}()
 	if err != nil {
-		return newKey, fmt.Errorf(`l.getSignerPrivateKey() %w`, err)
-	}
-
-	signerMasterKey, err := hdkeychain.NewMaster(mintPrivateKey.Serialize(), &chaincfg.MainNetParams)
-	if err != nil {
-		return newKey, fmt.Errorf(" hdkeychain.NewMaster(mintPrivateKey.Serialize()). %w", err)
+		return newKey, fmt.Errorf("hdkeychain.NewMaster(derivedKey.Key, &chaincfg.MainNetParams). %w", err)
 	}
 
 	// Create New seed with one higher version
-	newSeed, err := l.createNewSeed(signerMasterKey, unit, highestSeed.Version+1, uint(fee), amounts)
-
+	newSeed, err := l.createNewSeed(derivedSignerKey, unit, highestSeed.Version+1, uint(fee), amounts)
 	if err != nil {
 		return newKey, fmt.Errorf(`l.createNewSeed(signerMasterKey, unit, highestSeed.Version+1, fee) %w`, err)
 	}
+	newSeed.AccountId = signerInfo.AccountId
 
 	// add new key to db
 	err = l.db.SaveNewSeed(tx, newSeed)
@@ -297,7 +301,7 @@ func (l *Signer) RotateKeyset(signerInfo SignerInfo, unit cashu.Unit, fee uint64
 
 	seeds = append(seeds, newSeed)
 
-	keysets, activeKeysets, err := GetKeysetsFromSeeds(seeds, signerMasterKey)
+	keysets, activeKeysets, err := GetKeysetsFromSeeds(seeds, derivedSignerKey)
 	if err != nil {
 		return newKey, fmt.Errorf(`m.DeriveKeysetFromSeeds(seeds, parsedPrivateKey). %w`, err)
 	}
@@ -311,19 +315,22 @@ func (l *Signer) RotateKeyset(signerInfo SignerInfo, unit cashu.Unit, fee uint64
 	if !exists {
 		return signer.keysets[newSeed.Id], fmt.Errorf("Account does not exists")
 	}
-	// Parse the seeds to get the amounts indexes
 	for _, seed := range seeds {
 		for index, val := range seed.Amounts {
-			signer.keysetIndexes[seed.Id][val] = index
+			_, exists := signer.keysetIndexes[seed.Id]
+			if !exists {
+				signer.keysetIndexes[seed.Id] = make(map[uint64]int)
+				signer.keysetIndexes[seed.Id][val] = index
+			} else {
+				signer.keysetIndexes[seed.Id][val] = index
+			}
 		}
 	}
-
 	signer.keysets = keysets
 	signer.activeKeysets = activeKeysets
 
 	l.signers[signerInfo.AccountId] = signer
 
-	signerMasterKey = nil
 	return signer.keysets[newSeed.Id], nil
 }
 

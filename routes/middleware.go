@@ -2,8 +2,6 @@ package routes
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/binary"
 	"nutmix_remote_signer/database"
 	"nutmix_remote_signer/signer"
 
@@ -36,16 +34,23 @@ func AuthMiddleware(db database.SqliteDB) grpc.UnaryServerInterceptor {
 			return nil, status.Error(codes.Unauthenticated, "Token does not exists")
 		}
 
+		account, err := db.GetAccountById(authToken.AccountId)
+		if err != nil {
+			return nil, status.Error(codes.Unauthenticated, "acccount does not exists")
+		}
+		if account == nil {
+			return nil, status.Error(codes.Unauthenticated, "No account")
+		}
+
 		if !authToken.Active {
 			return nil, status.Error(codes.Unauthenticated, "Inactive auth token")
 		}
-		// calculate a random value from the id and npub together
-		unitSha256 := sha256.Sum256([]byte(authToken.AccountId + authToken.Id))
-		derivationInteger := binary.BigEndian.Uint32(unitSha256[:4])
+
+		// FIX: Verify signature of the account
 
 		signerInfo := signer.SignerInfo{
 			AccountId:  authToken.AccountId,
-			Derivation: derivationInteger,
+			Derivation: uint32(account.Derivation),
 		}
 		// Add user info to context
 		ctx = context.WithValue(ctx, signerInfoKey, signerInfo)
