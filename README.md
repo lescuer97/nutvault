@@ -27,3 +27,12 @@ Run the following command a write the seedphrase to the input:
 ```bash 
 secret-tool store --label="nutvault-seed" label nutvault-seed
 ```
+
+
+## Multi mint account management
+### 
+Run this command to get account management going:
+```
+protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative --experimental_allow_proto3_optional gen/account_management.proto
+```
+

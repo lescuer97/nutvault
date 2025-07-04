@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package account_management;
+option go_package = "gen/account_management";
+
+service AccountManagement {
+  rpc AddAccount(AddAccountRequest) returns (BooleanResponse);
+  rpc DeleteAccount(DeleteAccountRequest) returns (BooleanResponse);
+  rpc DisableAccount(AddAccountRequest) returns (BooleanResponse);
+  rpc GetAccountsFromNpub(GetAccountsFromNpubRequest) returns (BooleanResponse);
+
+  rpc GetSecretToken(GetAccountsFromNpubRequest) returns (GetSecretTokenResponse);
+  rpc SecretTokenRotation(SecretTokenRotationRequest) returns (BooleanResponse);
+  rpc DisableSecretToken(DisableSecretTokenRequest) returns (BooleanResponse);
+}
+
+message AddAccountRequest {
+  string npub  = 1;
+}
+message DeleteAccountRequest {
+  string npub  = 1;
+}
+
+message GetAccountsFromNpubRequest {
+  string npub  = 1;
+}
+
+message GetAccountsFromNpubResponse {
+  repeated Account accounts = 1;
+}
+
+message Account {
+  string account_id  = 1;
+  string name  = 2;
+  uint64 created_at  = 3;
+  bool active  = 4;
+
+}
+
+message SecretTokenRotationRequest {
+  string account_id  = 1;
+}
+message GetSecretTokenRequest {
+  string account_id  = 1;
+}
+message GetSecretTokenResponse {
+  string token  = 1;
+  bool active = 2;
+}
+
+message DisableSecretTokenRequest {
+  string token  = 1;
+}
+
+message BooleanResponse {
+  Error error = 1;
+  bool success = 2;
+}
+
+enum ErrorCode {
+  ERROR_CODE_UNSPECIFIED = 0;
+  ERROR_CODE_NO_ACCOUNT = 1;
+  ERROR_CODE_NO_TOKEN = 2;
+
+}
+
+message Error {
+  ErrorCode code = 1;
+  string detail = 2;
+}
