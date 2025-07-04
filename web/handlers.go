@@ -15,6 +15,11 @@ func CreateAccountHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+
+func LoginHandler(w http.ResponseWriter, r *http.Request) {
+	templates.Login().Render(r.Context(), w)
+}
+
 func GetAccountHandler(w http.ResponseWriter, r *http.Request) {
 	// TODO: Parse request, construct proto, call gRPC client
 	w.WriteHeader(http.StatusNotImplemented)

@@ -9,6 +9,8 @@ import (
 func NewRouter() http.Handler {
 	router := chi.NewRouter()
 
+
+	router.Get("/login", LoginHandler)
 	router.Get("/", IndexHandler)
 
 	return router
