@@ -74,7 +74,7 @@ func (s *Signer) GenerateMintKeysFromPublicKeysets(keysetIndex KeysetGenerationI
 	if !exists {
 		return privateKeysets, fmt.Errorf("signer account does not exists. %w", err)
 	}
-	slog.Info("Received Keyset Generation", slog.String("account", signerInfo.AccountId))
+	slog.Info("Generating private keys for account", slog.String("account", signerInfo.AccountId))
 	for i, val := range signer.keysets {
 
 		keysetAmounts, exists := keysetIndex[hex.EncodeToString(val.Id)]
