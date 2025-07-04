@@ -10,17 +10,14 @@ import (
 
 func TestSeedRotation(t *testing.T) {
 
-	log.Printf("before tempdir setup")
 	dir := t.TempDir()
 	ctx := context.Background()
 
-	log.Printf("before database setup")
 	sqlite, err := DatabaseSetup(ctx, dir)
 	defer sqlite.Db.Close()
 	if err != nil {
 		t.Fatalf(`database.DatabaseSetup(ctx, "migrations"). %+v`, err)
 	}
-	log.Printf("after database setup")
 
 	seed := Seed{
 		Active:      true,
@@ -32,7 +29,7 @@ func TestSeedRotation(t *testing.T) {
 		Amounts:     []uint64{1, 2, 4},
 		CreatedAt:   2,
 	}
-	log.Printf("Before tx")
+
 	tx, err := sqlite.Db.Begin()
 	if err != nil {
 		t.Fatalf(`sqlite.Db.Begin(). %+v`, err)
@@ -71,12 +68,10 @@ func TestSeedRotation(t *testing.T) {
 	if err != nil {
 		t.Fatalf(`Could not commit transaction. %+v`, err)
 	}
-	log.Printf("before get all seeds")
 	seeds, err := sqlite.GetAllSeeds()
 	if err != nil {
 		t.Errorf(`sqlite.GetAllSeeds(). %+v`, err)
 	}
-	log.Printf("after Seeds %+v", seeds)
 
 	for _, seed := range seeds {
 		if seed.Id == "id1" && seed.Active != false {
@@ -87,8 +82,58 @@ func TestSeedRotation(t *testing.T) {
 		}
 	}
 
-	log.Printf("before commit")
+}
+func TestSeedRotation2(t *testing.T) {
 
-	log.Printf("After commit")
+	dir := t.TempDir()
+	ctx := context.Background()
+
+	sqlite, err := DatabaseSetup(ctx, dir)
+	defer sqlite.Db.Close()
+	if err != nil {
+		t.Fatalf(`database.DatabaseSetup(ctx, "migrations"). %+v`, err)
+	}
+
+	seeds, err := sqlite.GetAllSeeds()
+	if err != nil {
+		t.Errorf(`sqlite.GetAllSeeds(). %+v`, err)
+	}
+
+	seed := Seed{
+		Active:      true,
+		Version:     1,
+		Id:          "id1",
+		Unit:        cashu.Sat.String(),
+		InputFeePpk: 1,
+		Legacy:      false,
+		Amounts:     []uint64{1, 2, 4},
+		CreatedAt:   2,
+	}
+
+	tx, err := sqlite.Db.Begin()
+	if err != nil {
+		t.Fatalf(`sqlite.Db.Begin(). %+v`, err)
+	}
+	defer tx.Rollback()
+
+	err = sqlite.SaveNewSeed(tx, seed)
+	if err != nil {
+		t.Errorf(`Could not save seed. %+v`, err)
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		t.Fatalf(`Could not commit transaction. %+v`, err)
+	}
+
+	seeds, err = sqlite.GetAllSeeds()
+	if err != nil {
+		t.Errorf(`sqlite.GetAllSeeds(). %+v`, err)
+	}
+	for _, seed := range seeds {
+		if seed.Id == "id1" && seed.Active != true {
+			t.Error(`seed with id: id1 should be inactive`)
+		}
+	}
 
 }
