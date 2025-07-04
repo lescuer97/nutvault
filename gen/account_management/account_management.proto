@@ -1,7 +1,7 @@
 syntax = "proto3";
 
 package account_management;
-option go_package = "gen/account_management";
+option go_package = "nutmix_remote_signer/gen/account_management";
 
 service AccountManagement {
   rpc AddAccount(AddAccountRequest) returns (BooleanResponse);

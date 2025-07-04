@@ -3,3 +3,4 @@
 tls/
 main
 build-errors.log
+*_templ.go

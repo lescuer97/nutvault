@@ -3,7 +3,7 @@ package routes
 import (
 	"errors"
 	"fmt"
-	sig "nutmix_remote_signer/gen"
+	sig "nutmix_remote_signer/gen/signer"
 	"nutmix_remote_signer/signer"
 	"nutmix_remote_signer/utils"
 	"strings"

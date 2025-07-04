@@ -7,10 +7,12 @@ import (
 	"log/slog"
 	"net"
 	"nutmix_remote_signer/database"
-	sig "nutmix_remote_signer/gen"
+	sig "nutmix_remote_signer/gen/signer"
 	"nutmix_remote_signer/routes"
 	"nutmix_remote_signer/signer"
 	"os"
+
+	"nutmix_remote_signer/web"
 
 	"github.com/joho/godotenv"
 	"google.golang.org/grpc"
@@ -95,6 +97,13 @@ func main() {
 	})
 
 	// Serve gRPC requests
+	go func() {
+		slog.Info("Starting web server...", slog.String("port", abstractSocket))
+		if err := web.RunHTTPServer(":1532", nil); err != nil {
+			log.Fatalf("http server: %v", err)
+		}
+	}()
+
 	if err := s.Serve(listener); err != nil {
 		log.Fatalf("Failed to serve: %v", err)
 	}

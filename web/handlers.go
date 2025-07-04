@@ -1,0 +1,21 @@
+package web
+
+import (
+	"net/http"
+
+	"nutmix_remote_signer/web/templates"
+)
+
+func IndexHandler(w http.ResponseWriter, r *http.Request) {
+	templates.Hello("World").Render(r.Context(), w)
+}
+
+func CreateAccountHandler(w http.ResponseWriter, r *http.Request) {
+	// TODO: Parse request, construct proto, call gRPC client
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+func GetAccountHandler(w http.ResponseWriter, r *http.Request) {
+	// TODO: Parse request, construct proto, call gRPC client
+	w.WriteHeader(http.StatusNotImplemented)
+}

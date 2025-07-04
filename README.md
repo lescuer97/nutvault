@@ -33,6 +33,6 @@ secret-tool store --label="nutvault-seed" label nutvault-seed
 ### 
 Run this command to get account management going:
 ```
-protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative --experimental_allow_proto3_optional gen/account_management.proto
+protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative --experimental_allow_proto3_optional gen/account_management/account_management.proto
 ```
 

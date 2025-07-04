@@ -6,7 +6,7 @@ import (
 
 	"fmt"
 	"log/slog"
-	sig "nutmix_remote_signer/gen"
+	sig "nutmix_remote_signer/gen/signer"
 	"nutmix_remote_signer/signer"
 
 	goNutsCashu "github.com/elnosh/gonuts/cashu"
