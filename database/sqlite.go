@@ -156,7 +156,7 @@ func (sq *SqliteDB) UpdateSeedsActiveStatus(tx *sql.Tx, seeds []Seed) error {
 	for _, seed := range seeds {
 		// Exec with consistent field naming
 		if _, err = stmt.Exec(seed.Active, seed.Id); err != nil {
-			return fmt.Errorf("exec UpdateSeedsActiveStatus for seed ID %d: %w", seed.Id, err)
+			return fmt.Errorf("exec UpdateSeedsActiveStatus for seed ID %s: %w", seed.Id, err)
 		}
 	}
 
