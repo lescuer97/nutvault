@@ -244,9 +244,6 @@ func (l *Signer) createNewSeed(mintPrivateKey *hdkeychain.ExtendedKey, unit cash
 func (l *Signer) RotateKeyset(signerInfo SignerInfo, unit cashu.Unit, fee uint64, amounts []uint64) (MintPublicKeyset, error) {
 	slog.Info("Rotating keyset", slog.String("unit", unit.String()), slog.String("fee", strconv.FormatUint(uint64(fee), 10)))
 	newKey := MintPublicKeyset{}
-	// if max_order > DefaultMaxOrder {
-	// 	return newKey, utils.ErrAboveMaxOrder
-	// }
 
 	tx, err := l.db.Db.Begin()
 	if err != nil {
