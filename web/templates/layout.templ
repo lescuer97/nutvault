@@ -1,13 +1,12 @@
 package templates
 
-templ Layout(title string, styles string) {
+templ Layout(title string) {
 	<html>
 		<head>
 			<title>{ title }</title>
-			<script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.6/dist/htmx.min.js" integrity="sha384-Akqfrbj/HpNVo8k11SXBb6TlBWmXXlYQrCSqEWmyKJe+hDm3Z/B2WVG4smwBkRVm" crossorigin="anonymous"></script>
-			if styles != "" {
-				<link rel="stylesheet" href={ styles }>
-			}
+			<script  src="static/app.js" type="module" defer></script>
+			<script  src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.6/dist/htmx.min.js" integrity="sha384-Akqfrbj/HpNVo8k11SXBb6TlBWmXXlYQrCSqEWmyKJe+hDm3Z/B2WVG4smwBkRVm" crossorigin="anonymous"></script>
+			<link rel="stylesheet" href="static/app.css" />
 		</head>
 		<body>
 			{ children... }

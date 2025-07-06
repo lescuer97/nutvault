@@ -1,11 +1,11 @@
 package templates
 
-templ Login() {
-    @Layout("Login", "/static/login.css") {
-		<div class="login-container">
+templ Login(nonce string) {
+    @Layout("Login") {
+		<form nonce={nonce} id="loginContainer">
 			<h2>Login Required</h2>
 			<p>Please log in to continue.</p>
-			<button class="login-button" hx-post="/login">Login</button>
-		</div>
+			<button class="login-button" type="submit">Login</button>
+		</form>
     }
 }
