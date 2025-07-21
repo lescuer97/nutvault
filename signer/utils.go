@@ -24,6 +24,7 @@ func DeriveKeyset(mintKey *hdkeychain.ExtendedKey, seed database.Seed, amounts [
 		Active:            seed.Active,
 		DerivationPathIdx: uint32(seed.Version),
 		Keys:              make(map[uint64]crypto.KeyPair),
+		Version:           seed.Version,
 	}
 
 	slog.Debug("converting unit to cashu unit", slog.String("unit", seed.Unit))
@@ -85,6 +86,7 @@ func LegacyKeyDerivation(key *hdkeychain.ExtendedKey, keyset *MintKeyset, seed d
 	if err != nil {
 		return fmt.Errorf(`GenerateKeypairs(versionKey, values, &keyset) %w`, err)
 	}
+	keyset.Version = seed.Version
 	return nil
 }
 
@@ -138,6 +140,7 @@ func KeyDerivation(key *hdkeychain.ExtendedKey, keyset *MintKeyset, seed databas
 	if err != nil {
 		return fmt.Errorf(`GenerateKeypairs(versionKey, values, &keyset) %w`, err)
 	}
+	keyset.Version = seed.Version
 	return nil
 }
 

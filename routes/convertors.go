@@ -3,6 +3,7 @@ package routes
 import (
 	"errors"
 	"fmt"
+	"log"
 	sig "nutmix_remote_signer/gen"
 	"nutmix_remote_signer/signer"
 	"nutmix_remote_signer/utils"
@@ -52,7 +53,16 @@ func ConvertToKeysResponse(pubkey []byte, keys []signer.MintPublicKeyset) *sig.K
 			Active:      mintPubKey.Active,
 			InputFeePpk: uint64(mintPubKey.InputFeePpk),
 			Keys:        &keys,
+			Version:     mintPubKey.Version,
 		}
+
+		if keyset.Keys == nil {
+			log.Panicf("Keys should always be set should always be set")
+		}
+		if keyset.Id == nil {
+			log.Panicf("Id should always be set")
+		}
+
 		response.Keysets.Keysets[i] = &keyset
 	}
 
@@ -71,8 +81,15 @@ func ConvertToKeyRotationResponse(key signer.MintPublicKeyset) *sig.KeyRotationR
 		Active:      key.Active,
 		InputFeePpk: uint64(key.InputFeePpk),
 		Keys:        &keys,
+		Version:     key.Version,
 	}
 
+	if keyset.Keys == nil {
+		log.Panicf("Keys should always be set should always be set")
+	}
+	if keyset.Id == nil {
+		log.Panicf("Id should always be set")
+	}
 	response.Keyset = &keyset
 
 	return &response

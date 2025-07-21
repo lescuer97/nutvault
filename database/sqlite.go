@@ -17,7 +17,7 @@ import (
 type Seed struct {
 	Active      bool
 	CreatedAt   int64
-	Version     int
+	Version     uint64
 	Unit        string
 	Id          string
 	InputFeePpk uint `json:"input_fee_ppk" db:"input_fee_ppk"`

@@ -21,6 +21,7 @@ type MintPublicKeyset struct {
 	Keys              map[uint64][]byte
 	InputFeePpk       uint
 	Legacy            bool
+	Version           uint64
 }
 type MintKeyset struct {
 	Id                []byte
@@ -29,6 +30,7 @@ type MintKeyset struct {
 	DerivationPathIdx uint32
 	Keys              map[uint64]crypto.KeyPair
 	InputFeePpk       uint
+	Version           uint64
 }
 
 func MakeMintPublickeys(mintKey MintKeyset) MintPublicKeyset {
@@ -39,6 +41,7 @@ func MakeMintPublickeys(mintKey MintKeyset) MintPublicKeyset {
 		DerivationPathIdx: mintKey.DerivationPathIdx,
 		Keys:              make(map[uint64][]byte, len(mintKey.Keys)),
 		InputFeePpk:       uint(mintKey.InputFeePpk),
+		Version:           mintKey.Version,
 	}
 
 	for key, keypair := range mintKey.Keys {
@@ -96,7 +99,7 @@ func (s *Signer) GenerateMintKeysFromPublicKeysets(keysetIndex KeysetGenerationI
 			return privateKeysets, fmt.Errorf("cashu.UnitFromString(val.Unit). %w", err)
 		}
 
-		seed := database.Seed{Active: val.Active, Id: hexId, Unit: val.Unit, Version: int(val.DerivationPathIdx), InputFeePpk: val.InputFeePpk, Legacy: val.Legacy}
+		seed := database.Seed{Active: val.Active, Id: hexId, Unit: val.Unit, Version: uint64(val.DerivationPathIdx), InputFeePpk: val.InputFeePpk, Legacy: val.Legacy}
 		if val.Legacy {
 			err := LegacyKeyDerivation(mintKey, &keyset, seed, unit, keysetAmounts)
 			if err != nil {

@@ -5,7 +5,7 @@
 ### Running key generation for grpc.
 
 Run this command at the base of the repo:
-```
+```bash
 protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative --experimental_allow_proto3_optional gen/signer.proto
 ```
 
@@ -16,7 +16,7 @@ You SHOULD not run the signer with the MINT_PRIVATE_KEY after the first time. Th
 unnecesarily. 
 
 To run the signer do:
-```
+```bash
 go run ./...
 ```
 
