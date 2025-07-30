@@ -15,6 +15,7 @@ This should be a BIP-39 seedphrase.
 ```bash 
 # NOTE: when you run this command you will get a prompt for password. This is where you paste the seedphrase.
 secret-tool store --label="nutvault-seed" label nutvault-seed
+```
 
 To run the signer do:
 ```bash
