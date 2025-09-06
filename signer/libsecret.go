@@ -2,7 +2,6 @@ package signer
 
 import (
 	"fmt"
-	"log"
 	"log/slog"
 
 	"github.com/godbus/dbus/v5"
@@ -77,7 +76,6 @@ func GetNutmixSignerKey() (string, error) {
 
 		// Convert the secret value to a string
 		secretValue := string(secretStruct.Value)
-		log.Printf("secretValue: %+v", secretValue)
 		return secretValue, nil
 	}
 
