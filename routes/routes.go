@@ -6,6 +6,8 @@ import (
 	// "encoding/json"
 	"fmt"
 	"log/slog"
+	"time"
+
 	sig "nutmix_remote_signer/gen"
 	"nutmix_remote_signer/signer"
 
@@ -95,43 +97,6 @@ func (s *Server) VerifyProofs(ctx context.Context, proofs *sig.Proofs) (*sig.Boo
 	cashuProofs := goNutsCashu.Proofs{}
 	slog.Debug("Parsing grpc proofs to signer types")
 	for _, val := range proofs.Proof {
-		// htlcWitness := val.Witness.GetHtlcWitness()
-		// p2pkWitness := val.Witness.GetP2PkWitness()
-		// var witness string = ""
-		//
-		// if p2pkWitness != nil {
-		// 	wit := nut11.P2PKWitness{
-		// 		Signatures: p2pkWitness.Signatures,
-		// 	}
-		// 	witnessBytes, err := json.Marshal(wit)
-		// 	if err != nil {
-		// 		slog.Error("could not marshall p2pk witness", slog.String("extra", err.Error()))
-		// 		if mappedErr := ConvertErrorToResponse(err); mappedErr != nil {
-		// 			boolResponse := sig.BooleanResponse{}
-		// 			boolResponse.Error = mappedErr
-		// 			return &boolResponse, nil
-		// 		}
-		// 		return nil, fmt.Errorf("json.Marshal(wit). %w", err)
-		// 	}
-		// 	witness = string(witnessBytes)
-		// } else if htlcWitness != nil {
-		// 	wit := nut14.HTLCWitness{
-		// 		Signatures: htlcWitness.Signatures,
-		// 		Preimage:   htlcWitness.Preimage,
-		// 	}
-		// 	witnessBytes, err := json.Marshal(wit)
-		// 	if err != nil {
-		// 		slog.Error(err.Error())
-		// 		if mappedErr := ConvertErrorToResponse(err); mappedErr != nil {
-		// 			boolResponse := sig.BooleanResponse{}
-		// 			boolResponse.Error = mappedErr
-		// 			return &boolResponse, nil
-		// 		}
-		// 		return nil, fmt.Errorf("json.Marshal(wit). %w", err)
-		// 	}
-		// 	witness = string(witnessBytes)
-		// }
-
 		cashuProofs = append(cashuProofs, goNutsCashu.Proof{Amount: val.Amount, Id: hex.EncodeToString(val.KeysetId), C: hex.EncodeToString(val.C), Witness: "", Secret: string(val.Secret)})
 	}
 	err := s.Signer.VerifyProofs(cashuProofs, goNutsCashu.BlindedMessages{})
@@ -174,7 +139,16 @@ func (s *Server) RotateKeyset(ctx context.Context, req *sig.RotationRequest) (*s
 		return nil, fmt.Errorf("ConvertSigRotationRequest(). %w", err)
 	}
 
-	newKey, err := s.Signer.RotateKeyset(rotationReq.Unit, rotationReq.Fee, rotationReq.Amounts)
+	// Convert FinalExpiry unix timestamp to time.Time. If 0, use default of 270 hours and log a warning.
+	var expiryTime time.Time
+	if rotationReq.FinalExpiry == 0 {
+		expiryTime = time.Now().Add(270 * time.Hour)
+		slog.Warn("RotationRequest did not include final_expiry; using default of 270 hours")
+	} else {
+		expiryTime = time.Unix(int64(rotationReq.FinalExpiry), 0)
+	}
+
+	newKey, err := s.Signer.RotateKeyset(rotationReq.Unit, rotationReq.Fee, rotationReq.Amounts, expiryTime)
 	if err != nil {
 		slog.Error("Could not rotate keysets", slog.String("extra", err.Error()))
 		if mappedErr := ConvertErrorToResponse(err); mappedErr != nil {

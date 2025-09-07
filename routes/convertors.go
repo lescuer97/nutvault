@@ -54,6 +54,7 @@ func ConvertToKeysResponse(pubkey []byte, keys []signer.MintPublicKeyset) *sig.K
 			InputFeePpk: uint64(mintPubKey.InputFeePpk),
 			Keys:        &keys,
 			Version:     mintPubKey.Version,
+			FinalExpiry: uint64(mintPubKey.FinalExpiry.Unix()),
 		}
 
 		if keyset.Keys == nil {
@@ -82,6 +83,7 @@ func ConvertToKeyRotationResponse(key signer.MintPublicKeyset) *sig.KeyRotationR
 		InputFeePpk: uint64(key.InputFeePpk),
 		Keys:        &keys,
 		Version:     key.Version,
+		FinalExpiry: uint64(key.FinalExpiry.Unix()),
 	}
 
 	if keyset.Keys == nil {
@@ -96,9 +98,10 @@ func ConvertToKeyRotationResponse(key signer.MintPublicKeyset) *sig.KeyRotationR
 }
 
 type RotationRequest struct {
-	Fee     uint64
-	Unit    cashu.Unit
-	Amounts []uint64
+	Fee         uint64
+	Unit        cashu.Unit
+	Amounts     []uint64
+	FinalExpiry uint64
 }
 
 func ConvertSigRotationRequest(req *sig.RotationRequest) (RotationRequest, error) {
@@ -109,6 +112,7 @@ func ConvertSigRotationRequest(req *sig.RotationRequest) (RotationRequest, error
 	}
 	rotationRequest.Fee = req.InputFeePpk
 	rotationRequest.Amounts = req.Amounts
+	rotationRequest.FinalExpiry = req.GetFinalExpiry()
 
 	unit, err := ConvertSigUnitToCashuUnit(req.Unit)
 	if err != nil {

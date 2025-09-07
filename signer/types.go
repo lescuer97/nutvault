@@ -6,6 +6,7 @@ import (
 	"log"
 	"log/slog"
 	"nutmix_remote_signer/database"
+	"time"
 
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
 	"github.com/btcsuite/btcd/chaincfg"
@@ -22,6 +23,7 @@ type MintPublicKeyset struct {
 	InputFeePpk       uint
 	Legacy            bool
 	Version           uint64
+	FinalExpiry           time.Time
 }
 type MintKeyset struct {
 	Id                []byte
@@ -31,6 +33,7 @@ type MintKeyset struct {
 	Keys              map[uint64]crypto.KeyPair
 	InputFeePpk       uint
 	Version           uint64
+	FinalExpiry           time.Time
 }
 
 func MakeMintPublickeys(mintKey MintKeyset) MintPublicKeyset {
@@ -42,6 +45,7 @@ func MakeMintPublickeys(mintKey MintKeyset) MintPublicKeyset {
 		Keys:              make(map[uint64][]byte, len(mintKey.Keys)),
 		InputFeePpk:       uint(mintKey.InputFeePpk),
 		Version:           mintKey.Version,
+		FinalExpiry: mintKey.FinalExpiry,
 	}
 
 	for key, keypair := range mintKey.Keys {
@@ -91,8 +95,8 @@ func (s *Signer) GenerateMintKeysFromPublicKeysets(keysetIndex KeysetGenerationI
 		}
 
 		hexId := hex.EncodeToString(val.Id)
-		privateKeysets[i] = MintKeyset{Id: val.Id, Unit: val.Unit, DerivationPathIdx: val.DerivationPathIdx, Active: val.Active, InputFeePpk: val.InputFeePpk}
-		keyset := MintKeyset{Id: val.Id, Unit: val.Unit, DerivationPathIdx: val.DerivationPathIdx, Active: val.Active, InputFeePpk: val.InputFeePpk, Keys: make(map[uint64]crypto.KeyPair)}
+		privateKeysets[i] = MintKeyset{Id: val.Id, Unit: val.Unit, DerivationPathIdx: val.DerivationPathIdx, Active: val.Active, InputFeePpk: val.InputFeePpk, FinalExpiry:  val.FinalExpiry }
+		keyset := MintKeyset{Id: val.Id, Unit: val.Unit, DerivationPathIdx: val.DerivationPathIdx, Active: val.Active, InputFeePpk: val.InputFeePpk, Keys: make(map[uint64]crypto.KeyPair), FinalExpiry:  val.FinalExpiry}
 
 		unit, err := cashu.UnitFromString(val.Unit)
 		if err != nil {

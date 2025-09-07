@@ -35,7 +35,7 @@ type Signer struct {
 	keysetIndexes KeysetGenerationIndexes
 }
 
-func SetupLocalSigner(db database.SqliteDB) (Signer, error) {
+func SetupLocalSigner(db database.SqliteDB, expiry_time time.Time) (Signer, error) {
 	signer := Signer{
 		db: db,
 	}
@@ -76,7 +76,7 @@ func SetupLocalSigner(db database.SqliteDB) (Signer, error) {
 		amounts := GetAmountsFromMaxOrder(DefaultMaxOrder)
 
 		slog.Info("Creating a new seed")
-		newSeed, err := signer.createNewSeed(masterKey, cashu.Sat, 1, 0, amounts)
+		newSeed, err := signer.createNewSeed(masterKey, cashu.Sat, 1, 0, amounts, expiry_time)
 
 		if err != nil {
 			return signer, fmt.Errorf("signer.createNewSeed(masterKey, 1, 0). %w", err)
@@ -147,7 +147,7 @@ func (l *Signer) getSignerPrivateKey(seed string) (*secp256k1.PrivateKey, error)
 	return mintKey, nil
 }
 
-func (l *Signer) createNewSeed(mintPrivateKey *hdkeychain.ExtendedKey, unit cashu.Unit, version uint64, fee uint, amounts []uint64) (database.Seed, error) {
+func (l *Signer) createNewSeed(mintPrivateKey *hdkeychain.ExtendedKey, unit cashu.Unit, version uint64, fee uint, amounts []uint64, expiry_time time.Time) (database.Seed, error) {
 	slog.Info("Generating new seed", slog.String("unit", unit.String()), slog.String("version", strconv.FormatInt(int64(version), 10)), slog.String("fee", strconv.FormatUint(uint64(fee), 10)))
 	// rotate one level up
 	newSeed := database.Seed{
@@ -158,6 +158,8 @@ func (l *Signer) createNewSeed(mintPrivateKey *hdkeychain.ExtendedKey, unit cash
 		InputFeePpk: fee,
 		Legacy:      false,
 		Amounts:     amounts,
+		FinalExpiry: expiry_time,
+		
 	}
 
 	keyset, err := DeriveKeyset(mintPrivateKey, newSeed, amounts)
@@ -175,7 +177,7 @@ func (l *Signer) createNewSeed(mintPrivateKey *hdkeychain.ExtendedKey, unit cash
 
 }
 
-func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint64, amounts []uint64) (MintPublicKeyset, error) {
+func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint64, amounts []uint64, expiry_time time.Time) (MintPublicKeyset, error) {
 	slog.Info("Rotating keyset", slog.String("unit", unit.String()), slog.String("fee", strconv.FormatUint(uint64(fee), 10)))
 	newKey := MintPublicKeyset{}
 
@@ -221,7 +223,7 @@ func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint64, amounts []uint64) (Mi
 	}
 
 	// Create New seed with one higher version
-	newSeed, err := l.createNewSeed(signerMasterKey, unit, highestSeed.Version+1, uint(fee), amounts)
+	newSeed, err := l.createNewSeed(signerMasterKey, unit, highestSeed.Version+1, uint(fee), amounts, expiry_time)
 
 	if err != nil {
 		return newKey, fmt.Errorf(`l.createNewSeed(signerMasterKey, unit, highestSeed.Version+1, fee) %w`, err)
