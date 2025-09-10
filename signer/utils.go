@@ -24,7 +24,9 @@ func DeriveKeyset(mintKey *hdkeychain.ExtendedKey, seed database.Seed, amounts [
 		Active:            seed.Active,
 		DerivationPathIdx: uint32(seed.Version),
 		Keys:              make(map[uint64]crypto.KeyPair),
-		Version:           seed.Version,
+
+		Version:     seed.Version,
+		FinalExpiry: seed.FinalExpiry,
 	}
 
 	slog.Debug("converting unit to cashu unit", slog.String("unit", seed.Unit))

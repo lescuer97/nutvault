@@ -23,7 +23,7 @@ type MintPublicKeyset struct {
 	InputFeePpk       uint
 	Legacy            bool
 	Version           uint64
-	FinalExpiry           time.Time
+	FinalExpiry       time.Time
 }
 type MintKeyset struct {
 	Id                []byte
@@ -33,7 +33,7 @@ type MintKeyset struct {
 	Keys              map[uint64]crypto.KeyPair
 	InputFeePpk       uint
 	Version           uint64
-	FinalExpiry           time.Time
+	FinalExpiry       time.Time
 }
 
 func MakeMintPublickeys(mintKey MintKeyset) MintPublicKeyset {
@@ -45,7 +45,7 @@ func MakeMintPublickeys(mintKey MintKeyset) MintPublicKeyset {
 		Keys:              make(map[uint64][]byte, len(mintKey.Keys)),
 		InputFeePpk:       uint(mintKey.InputFeePpk),
 		Version:           mintKey.Version,
-		FinalExpiry: mintKey.FinalExpiry,
+		FinalExpiry:       mintKey.FinalExpiry,
 	}
 
 	for key, keypair := range mintKey.Keys {
@@ -87,7 +87,8 @@ func (s *Signer) GenerateMintKeysFromPublicKeysets(keysetIndex KeysetGenerationI
 	}
 
 	slog.Debug(fmt.Sprintf("\n generating keys for %v keysets\n ", len(keysetIndex)))
-	for i, val := range s.keysets {
+	keysetsMap := s.store.GetKeysetsMapCopy()
+	for i, val := range keysetsMap {
 
 		keysetAmounts, exists := keysetIndex[hex.EncodeToString(val.Id)]
 		if !exists {
@@ -95,8 +96,8 @@ func (s *Signer) GenerateMintKeysFromPublicKeysets(keysetIndex KeysetGenerationI
 		}
 
 		hexId := hex.EncodeToString(val.Id)
-		privateKeysets[i] = MintKeyset{Id: val.Id, Unit: val.Unit, DerivationPathIdx: val.DerivationPathIdx, Active: val.Active, InputFeePpk: val.InputFeePpk, FinalExpiry:  val.FinalExpiry }
-		keyset := MintKeyset{Id: val.Id, Unit: val.Unit, DerivationPathIdx: val.DerivationPathIdx, Active: val.Active, InputFeePpk: val.InputFeePpk, Keys: make(map[uint64]crypto.KeyPair), FinalExpiry:  val.FinalExpiry}
+		privateKeysets[i] = MintKeyset{Id: val.Id, Unit: val.Unit, DerivationPathIdx: val.DerivationPathIdx, Active: val.Active, InputFeePpk: val.InputFeePpk, FinalExpiry: val.FinalExpiry}
+		keyset := MintKeyset{Id: val.Id, Unit: val.Unit, DerivationPathIdx: val.DerivationPathIdx, Active: val.Active, InputFeePpk: val.InputFeePpk, Keys: make(map[uint64]crypto.KeyPair), FinalExpiry: val.FinalExpiry}
 
 		unit, err := cashu.UnitFromString(val.Unit)
 		if err != nil {

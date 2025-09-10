@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"nutmix_remote_signer/database"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -27,17 +28,15 @@ import (
 
 type KeysetGenerationIndexes map[string]map[uint64]int
 type Signer struct {
-	keysets       map[string]MintPublicKeyset
-	activeKeysets map[string]MintPublicKeyset
-	db            database.SqliteDB
-	pubkey        *secp256k1.PublicKey
-	// this is used to rapidly calculate what indexes are needed for keyderivation
-	keysetIndexes KeysetGenerationIndexes
+	store  *KeysetStore
+	db     database.SqliteDB
+	pubkey *secp256k1.PublicKey
 }
 
-func SetupLocalSigner(db database.SqliteDB, expiry_time time.Time) (Signer, error) {
+func SetupLocalSigner(db database.SqliteDB, config Config) (Signer, error) {
 	signer := Signer{
-		db: db,
+		db:    db,
+		store: NewKeysetStore(),
 	}
 	slog.Info("Trying to get the Mint key")
 	// mint_privkey := os.Getenv("MINT_PRIVATE_KEY")
@@ -62,12 +61,11 @@ func SetupLocalSigner(db database.SqliteDB, expiry_time time.Time) (Signer, erro
 		masterKey = nil
 	}()
 
-	slog.Debug("Getting all the seeds from the database")
 	seeds, err := signer.db.GetAllSeeds()
 	if err != nil {
 		return signer, fmt.Errorf("signer.db.GetAllSeeds(). %w", err)
 	}
-	signer.keysetIndexes = make(KeysetGenerationIndexes)
+
 	if len(seeds) == 0 {
 		slog.Info("There are no seeds available.")
 
@@ -76,7 +74,7 @@ func SetupLocalSigner(db database.SqliteDB, expiry_time time.Time) (Signer, erro
 		amounts := GetAmountsFromMaxOrder(DefaultMaxOrder)
 
 		slog.Info("Creating a new seed")
-		newSeed, err := signer.createNewSeed(masterKey, cashu.Sat, 1, 0, amounts, expiry_time)
+		newSeed, err := signer.createNewSeed(masterKey, cashu.Sat, 1, 0, amounts, config.ExpireTime)
 
 		if err != nil {
 			return signer, fmt.Errorf("signer.createNewSeed(masterKey, 1, 0). %w", err)
@@ -99,42 +97,66 @@ func SetupLocalSigner(db database.SqliteDB, expiry_time time.Time) (Signer, erro
 		}
 		seeds = append(seeds, newSeed)
 	}
-
-	slog.Debug("Generating keysets from seeds")
 	keysets, activeKeysets, err := GetKeysetsFromSeeds(seeds, masterKey)
 	if err != nil {
 		return signer, fmt.Errorf(`signer.GetKeysetsFromSeeds(seeds, masterKey). %w`, err)
 	}
 
-	// Parse the seeds to get the amounts indexes
-	for _, seed := range seeds {
-		for index, val := range seed.Amounts {
-			_, exists := signer.keysetIndexes[seed.Id]
-			if !exists {
-				signer.keysetIndexes[seed.Id] = make(map[uint64]int)
-				signer.keysetIndexes[seed.Id][val] = index
-			} else {
-				signer.keysetIndexes[seed.Id][val] = index
+	// store keysets and indexes in the concurrency-safe store
+	signer.store.SetAll(keysets, activeKeysets)
+	signer.store.SetIndexesFromSeeds(seeds)
 
-			}
-		}
+	// Start background watcher (in separate goroutine) to rotate keysets when their FinalExpiry passes.
+	if config.AutoRotate {
+		slog.Debug("auto rotate activated starting watcher")
+		go signer.startWatcher(config.ExpireTime)
 	}
 
 	slog.Debug("Setting keysets into the signer")
-	signer.keysets = keysets
-	signer.activeKeysets = activeKeysets
+	// already stored in signer.store earlier
 	signer.pubkey = privateKey.PubKey()
 
 	return signer, nil
 }
 
-func (l *Signer) GetKeysets() []MintPublicKeyset {
-	response := []MintPublicKeyset{}
-	for _, mintkey := range l.keysets {
-		response = append(response, mintkey)
-	}
+// startWatcher starts the background loop that checks active keysets and
+// rotates any whose FinalExpiry has passed.
+func (s *Signer) startWatcher(expiry_time time.Time) {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+	for range ticker.C {
+		now := time.Now()
+		activeCopy := s.store.GetActiveKeysetsCopy()
+		for _, ks := range activeCopy {
+			if ks.FinalExpiry.IsZero() || ks.FinalExpiry.After(now) {
+				continue
+			}
+			unitStr := strings.ToLower(ks.Unit)
 
-	return response
+			unit, err := cashu.UnitFromString(unitStr)
+			if err != nil {
+				slog.Error("Could not parse unit for expired keyset", slog.String("unit", ks.Unit), slog.String("err", err.Error()))
+				continue
+			}
+
+			fee := uint64(ks.InputFeePpk)
+			amounts := make([]uint64, 0, len(ks.Keys))
+			for a := range ks.Keys {
+				amounts = append(amounts, a)
+			}
+
+			_, err = s.RotateKeyset(unit, fee, amounts, expiry_time)
+			if err != nil {
+				slog.Error("Auto-rotation failed", slog.String("unit", unitStr), slog.String("err", err.Error()))
+			} else {
+				slog.Info("Auto-rotation succeeded", slog.String("unit", unitStr))
+			}
+		}
+	}
+}
+
+func (l *Signer) GetKeysets() []MintPublicKeyset {
+	return l.store.GetKeysetsList()
 }
 
 func (l *Signer) getSignerPrivateKey(seed string) (*secp256k1.PrivateKey, error) {
@@ -159,7 +181,6 @@ func (l *Signer) createNewSeed(mintPrivateKey *hdkeychain.ExtendedKey, unit cash
 		Legacy:      false,
 		Amounts:     amounts,
 		FinalExpiry: expiry_time,
-		
 	}
 
 	keyset, err := DeriveKeyset(mintPrivateKey, newSeed, amounts)
@@ -255,24 +276,20 @@ func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint64, amounts []uint64, exp
 		return newKey, fmt.Errorf(`tx.Commit(). %w`, err)
 	}
 	// Parse the seeds to get the amounts indexes
-	for _, seed := range seeds {
-		for index, val := range seed.Amounts {
-			_, exists := l.keysetIndexes[seed.Id]
-			if !exists {
-				l.keysetIndexes[seed.Id] = make(map[uint64]int)
-				l.keysetIndexes[seed.Id][val] = index
-			} else {
-				l.keysetIndexes[seed.Id][val] = index
+	// store indexes in the keyset store
+	l.store.SetIndexesFromSeeds(seeds)
 
-			}
-		}
-	}
-
-	l.keysets = keysets
-	l.activeKeysets = activeKeysets
+	// update store with newly derived keysets
+	l.store.SetAll(keysets, activeKeysets)
 
 	signerMasterKey = nil
-	return l.keysets[newSeed.Id], nil
+	return func() (MintPublicKeyset, error) {
+		ks, ok := l.store.GetKeysetById(newSeed.Id)
+		if !ok {
+			return MintPublicKeyset{}, fmt.Errorf("keyset not found after rotation: %s", newSeed.Id)
+		}
+		return ks, nil
+	}()
 }
 
 func (l *Signer) SignBlindMessages(messages goNutsCashu.BlindedMessages) (goNutsCashu.BlindedSignatures, error) {
@@ -283,7 +300,7 @@ func (l *Signer) SignBlindMessages(messages goNutsCashu.BlindedMessages) (goNuts
 	slog.Debug("Finding what amounts we need to create private keys for")
 	// get generation index from the stored index in the signer
 	for _, output := range messages {
-		keyset, keysetExits := l.keysetIndexes[output.Id]
+		keyset, keysetExits := l.store.GetIndex(output.Id)
 		if !keysetExits {
 			return nil, fmt.Errorf("Keyset does not exists: Id: %+v", output.Id)
 		}
@@ -355,7 +372,7 @@ func (l *Signer) VerifyProofs(proofs goNutsCashu.Proofs, blindMessages goNutsCas
 	slog.Debug("Finding what amounts we need to create private keys for")
 	// get index of amounts to use for generation
 	for _, proof := range proofs {
-		keyset, keysetExits := l.keysetIndexes[proof.Id]
+		keyset, keysetExits := l.store.GetIndex(proof.Id)
 		if !keysetExits {
 			return fmt.Errorf("Keyset does not exists: Id: %+v", proof.Id)
 		}

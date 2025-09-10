@@ -62,17 +62,27 @@ func main() {
 	expiryTime := time.Now()
 	expiryHoursEnvStr := os.Getenv("KEYSET_EXPIRY_HOURS")
 	if expiryHoursEnvStr != "" {
-		expiryHoursEnv , err := strconv.ParseUint(expiryHoursEnvStr, 10,64)
+		expiryHoursEnv, err := strconv.ParseUint(expiryHoursEnvStr, 10, 64)
 		if err != nil {
 			slog.Warn("KEYSET_EXPIRY_HOURS is not set correctly. Using default of 720 hours.")
 			expiryTime = expiryTime.Add(720 * time.Hour)
 		} else {
 			expiryTime = expiryTime.Add(time.Duration(expiryHoursEnv) * time.Hour)
 		}
+	} else {
+		expiryTime = expiryTime.Add(720 * time.Hour)
+	}
+	autoRotate, err := strconv.ParseBool(os.Getenv("AUTO_ROTATE"))
+	if err != nil {
+		autoRotate = false
 	}
 
+	config := signer.Config{
+		ExpireTime: expiryTime,
+		AutoRotate: autoRotate,
+	}
 
-	signer, err := signer.SetupLocalSigner(sqlite, expiryTime)
+	signer, err := signer.SetupLocalSigner(sqlite, config)
 	if err != nil {
 		log.Panicf(`signer.SetupLocalSigner(sqlite). %+v`, err)
 	}
@@ -92,7 +102,6 @@ func main() {
 		if err != nil {
 			log.Fatal("Error creating Unix socket:", err)
 		}
-
 
 	}
 
