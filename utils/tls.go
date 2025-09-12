@@ -96,8 +96,7 @@ func CreateAndSaveTLSKeyFromCA(caCertPEM, caKeyPEM []byte, name, configDir strin
 	if err != nil {
 		return nil, fmt.Errorf("x509.MarshalPKIXPublicKey: %w", err)
 	}
-	pubPEM := pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubBytes})
-	return pubPEM, nil
+	return pubBytes, nil
 }
 
 // SaveTLSKey writes certPEM and keyPEM into configDir using the provided name.

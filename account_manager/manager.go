@@ -115,7 +115,6 @@ func (m *Manager) CreateAccount(ctx context.Context, pubkey *btcec.PublicKey) (*
 			// Fail creation if TLS key generation fails
 			return nil, fmt.Errorf("CreateAndSaveTLSKeyFromCA: %w", err)
 		}
-		// Compute and set client pubkey fingerprint (sha256 of public key PEM)
 		sha := sha256.Sum256(pubPEM)
 		acc.ClientPubkeyFP = hex.EncodeToString(sha[:])
 	}
