@@ -1,9 +1,7 @@
 package web
 
 import (
-	"fmt"
 	"net/http"
-	"time"
 
 	"nutmix_remote_signer/web/templates"
 )
@@ -16,23 +14,16 @@ func DashboardHandler(serverData *ServerData) http.HandlerFunc {
 			http.Error(w, "Invalid login", http.StatusUnauthorized)
 			return
 		}
-		// Attempt to load accounts from DB if present
-		var cards []map[string]string
+		// Attempt to load accounts from DB if present and render Dashboard
 		if serverData.manager != nil {
 			accounts, err := serverData.manager.GetAccountsFromNpub(pubkey)
 			if err == nil {
-				for _, a := range accounts {
-					card := map[string]string{
-						"id":     a.Id,
-						"name":   a.Id,
-						"pubkey": fmt.Sprintf("%x", a.Npub),
-					}
-					cards = append(cards, card)
-				}
+				templates.Dashboard(accounts).Render(r.Context(), w)
+				return
 			}
 		}
 
-		templates.Dashboard().Render(r.Context(), w)
+		templates.Dashboard(nil).Render(r.Context(), w)
 	}
 }
 
@@ -45,21 +36,13 @@ func CreateKeyHandler(serverData *ServerData) http.HandlerFunc {
 			http.Error(w, "Invalid login", http.StatusUnauthorized)
 			return
 		}
-		// If a manager is available on serverData, call it to create and persist account
-		if serverData != nil && serverData.manager != nil {
 			acct, err := serverData.manager.CreateAccount(r.Context(), pubkey)
 			if err != nil {
 				http.Error(w, "failed to create account", http.StatusInternalServerError)
 				return
 			}
 
-			templates.KeyCard(acct.Id, acct.Id, acct.CreatedAt, fmt.Sprintf("%x", acct.Npub)).Render(r.Context(), w)
+			templates.KeyCard(*acct).Render(r.Context(), w)
 			return
-		}
-
-		// No manager: fallback mock
-		now := time.Now()
-		id := fmt.Sprintf("mock-%d", now.UnixNano())
-		templates.KeyCard(id, "New Key", now.Unix(), "deadbeefcafebabefakepubkey").Render(r.Context(), w)
 	}
 }

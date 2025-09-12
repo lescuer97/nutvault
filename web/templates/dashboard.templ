@@ -1,6 +1,8 @@
 package templates
 
-templ Dashboard() {
+import "nutmix_remote_signer/database"
+
+templ Dashboard(accounts []database.Account) {
 	@Layout("Dashboard") {
 		<div class="container mx-auto py-8 px-6">
 			<div class="flex items-center justify-between mb-6">
@@ -9,7 +11,9 @@ templ Dashboard() {
 			</div>
 
 			<div id="cards-list" class="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-				<!-- Cards will be inserted here by HTMX -->
+					for _, acct := range accounts {
+						@KeyCard(acct)
+					}
 			</div>
 		</div>
 	}

@@ -4,6 +4,7 @@ CREATE TABLE accounts (
     active bool NOT NULL,
     npub blob NOT NULL,
     id text NOT NULL,
+    name text NOT NULL,
     derivation int8 NOT NULL,
     created_at int8 NOT NULL,
     signature blob NOT NULL,
