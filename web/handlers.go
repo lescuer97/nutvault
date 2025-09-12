@@ -1,5 +1,7 @@
 package web
 
+// NOTE: New UI handlers (dashboard + createkey) are implemented in web/ui_handlers.go
+
 import (
 	"encoding/json"
 	"fmt"

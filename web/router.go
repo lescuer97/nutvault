@@ -52,6 +52,8 @@ func NewRouter(data *ServerData) http.Handler {
 	router.Group(func(r chi.Router) {
 		r.Use(AuthMiddleware(loginKey.Serialize()))
 		r.Get("/", IndexHandler)
+		r.Get("/dashboard", DashboardHandler(data))
+		r.Post("/createkey", CreateKeyHandler(data))
 	})
 
 	return router

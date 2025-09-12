@@ -112,25 +112,26 @@ func main() {
 		log.Fatalf("Error creating Unix socket: %+v", err)
 	}
 
-	s := grpc.NewServer(
+	signerGRPCServer := grpc.NewServer(
 		grpc.Creds(creds),
 		grpc.ChainUnaryInterceptor(routes.AuthMiddleware(sqlite)),
 	)
 
 	// Register the service
-	sig.RegisterSignerServiceServer(s, &routes.Server{
+	sig.RegisterSignerServiceServer(signerGRPCServer, &routes.Server{
 		Signer: signer,
 	})
 
 	// Serve gRPC requests
 	go func() {
 		slog.Info("Starting web server...", slog.String("port", abstractSocket))
-		if err := web.RunHTTPServer(":1532", nil); err != nil {
+		// Pass sqlite DB to web server so UI handlers can optionally read accounts
+		if err := web.RunHTTPServer(":4200", nil); err != nil {
 			log.Fatalf("http server: %v", err)
 		}
 	}()
 
-	if err := s.Serve(listener); err != nil {
+	if err := signerGRPCServer.Serve(listener); err != nil {
 		log.Fatalf("Failed to serve: %v", err)
 	}
 }

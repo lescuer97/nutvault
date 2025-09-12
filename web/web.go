@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"google.golang.org/grpc"
+	"nutmix_remote_signer/database"
 )
 
 type authData struct {
@@ -56,6 +57,11 @@ func (a *authData) MakeNonce() (string, error) {
 
 	return nonce, nil
 }
+
+// DB is an optional package-level pointer to the database. When set, handlers
+// will use it to load account data. It remains nil unless the application
+// explicitly assigns it (this keeps main.go unchanged for Option 1).
+var DB *database.SqliteDB
 
 type ServerData struct {
 	auth authData
