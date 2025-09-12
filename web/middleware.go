@@ -83,7 +83,7 @@ func AuthMiddleware(secret []byte) func(http.Handler) http.Handler {
 				return
 			}
 
-			aud, ok := claims["aud"].(string)
+			aud, ok := claims["sub"].(string)
 			if !ok {
 				http.Error(w, "audience claim missing or not string", http.StatusUnauthorized)
 				return
