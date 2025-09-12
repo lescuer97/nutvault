@@ -26,6 +26,7 @@ CREATE TABLE seeds (
 	legacy bool NOT NULL DEFAULT FALSE,
 	amounts TEXT NOT NULL,
 	account_id TEXT NOT NULL,
+	final_expiry int8 NOT NULL,
 	CONSTRAINT seeds_pk PRIMARY KEY (id),
 	CONSTRAINT seeds_unique UNIQUE (id)
 	CONSTRAINT fk_account FOREIGN KEY (account_id) REFERENCES accounts(id)

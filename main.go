@@ -149,7 +149,7 @@ func main() {
 
 	// Serve gRPC requests
 	go func() {
-		mgr := accountmanager.NewManager(&sqlite, caCertPEM, caKeyPEM, homeDir + "certificates")
+		mgr := accountmanager.NewManager(&sqlite, caCertPEM, caKeyPEM, "")
 
 		slog.Info("Starting web server...", slog.String("port", abstractSocket))
 		// Construct ServerData with the manager so UI handlers can use it

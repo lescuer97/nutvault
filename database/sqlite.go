@@ -164,12 +164,11 @@ func (sq *SqliteDB) SaveNewSeed(tx *sql.Tx, seed Seed) error {
 	amounts, err := cbor.Marshal(seed.Amounts)
 	if err != nil {
 		return fmt.Errorf("cbor.Marshal(seed.Amounts). %w", err)
-
 	}
+	log.Printf("\n seed: %+v", seed)
 	for {
 		tries += 1
-
-		_, err := tx.Exec("INSERT INTO seeds ( active, created_at, unit, id, version, input_fee_ppk, legacy, amounts, account_id,final_expiry) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9. $10)", seed.Active, seed.CreatedAt, seed.Unit, seed.Id, seed.Version, seed.InputFeePpk, seed.Legacy, string(amounts), seed.AccountId, seed.FinalExpiry)
+		_, err := tx.Exec("INSERT INTO seeds (active, created_at, unit, id, version, input_fee_ppk, legacy, amounts, account_id, final_expiry) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)", seed.Active, seed.CreatedAt, seed.Unit, seed.Id, seed.Version, seed.InputFeePpk, seed.Legacy, string(amounts), seed.AccountId, seed.FinalExpiry.Unix())
 
 		switch {
 		case err != nil && tries < 3:

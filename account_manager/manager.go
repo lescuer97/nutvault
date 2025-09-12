@@ -26,11 +26,33 @@ type Manager struct {
 	tlsConfigDir string
 }
 
+// NewManager returns a Manager and ensures the provided tlsDir exists.
+// If tlsDir is empty it defaults to $HOME/.config/nutvault/certificates.
+// The function attempts to create the directory with mode 0700 if it doesn't exist.
 func NewManager(db *database.SqliteDB, caCertPEM, caKeyPEM []byte, tlsDir string) Manager {
 	m := Manager{db: db}
 	m.caCertPEM = caCertPEM
 	m.caKeyPEM = caKeyPEM
-	m.tlsConfigDir = tlsDir
+
+	// Determine TLS config directory (use default if not provided)
+	dir := tlsDir
+	if dir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			// fallback to current directory if UserHomeDir is not available
+			log.Printf("warning: could not determine user home directory: %v", err)
+			dir = filepath.Join(".", ".config", "nutvault", "certificates")
+		} else {
+			dir = filepath.Join(home, ".config", "nutvault", "certificates")
+		}
+	}
+
+	// Ensure the directory exists
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		log.Printf("warning: failed to create tls config dir %s: %v", dir, err)
+	}
+
+	m.tlsConfigDir = dir
 	return m
 }
 
@@ -72,17 +94,20 @@ func (m *Manager) CreateAccount(ctx context.Context, pubkey *btcec.PublicKey) (*
 		Derivation: derivationInt,
 		CreatedAt:  time.Now().Unix(),
 	}
-	// schnorr.ParseSignature()
 
 	// If CA credentials are configured, create TLS key/cert and save to disk.
 	if len(m.caCertPEM) > 0 && len(m.caKeyPEM) > 0 {
+		// ensure tlsConfigDir is set (should have been set in NewManager)
 		if m.tlsConfigDir == "" {
-			// set default if not set
 			home, err := os.UserHomeDir()
 			if err != nil {
 				return nil, fmt.Errorf("os.UserHomeDir: %w", err)
 			}
 			m.tlsConfigDir = filepath.Join(home, ".config", "nutvault", "certificates")
+			// attempt to create if missing
+			if err := os.MkdirAll(m.tlsConfigDir, 0700); err != nil {
+				return nil, fmt.Errorf("failed to create tls config dir: %w", err)
+			}
 		}
 
 		pubPEM, err := utils.CreateAndSaveTLSKeyFromCA(m.caCertPEM, m.caKeyPEM, id, m.tlsConfigDir)
