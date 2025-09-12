@@ -6,6 +6,7 @@ import (
 	"log"
 	"log/slog"
 	"net"
+	"net/http"
 	"nutmix_remote_signer/database"
 	sig "nutmix_remote_signer/gen/signer"
 	"nutmix_remote_signer/routes"
@@ -14,6 +15,7 @@ import (
 	"strconv"
 	"time"
 
+	"nutmix_remote_signer/account_manager"
 	"nutmix_remote_signer/web"
 
 	"github.com/joho/godotenv"
@@ -59,6 +61,9 @@ func main() {
 		log.Panicf(`database.DatabaseSetup(ctx, "migrations"). %+v`, err)
 	}
 	defer sqlite.Db.Close()
+
+	// create account manager
+	mgr := accountmanager.NewManager(&sqlite)
 
 	// get expirty time from env var if not use default
 	expiryTime := time.Now()
@@ -125,8 +130,10 @@ func main() {
 	// Serve gRPC requests
 	go func() {
 		slog.Info("Starting web server...", slog.String("port", abstractSocket))
-		// Pass sqlite DB to web server so UI handlers can optionally read accounts
-		if err := web.RunHTTPServer(":4200", nil); err != nil {
+		// Construct ServerData with the manager so UI handlers can use it
+		sd := web.NewServerData(&mgr)
+		router := web.NewRouter(sd)
+		if err := http.ListenAndServe(":4200", router); err != nil {
 			log.Fatalf("http server: %v", err)
 		}
 	}()

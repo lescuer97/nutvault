@@ -7,8 +7,7 @@ import (
 	"net/http"
 	"sync"
 
-	"google.golang.org/grpc"
-	"nutmix_remote_signer/database"
+	"nutmix_remote_signer/account_manager"
 )
 
 type authData struct {
@@ -58,21 +57,20 @@ func (a *authData) MakeNonce() (string, error) {
 	return nonce, nil
 }
 
-// DB is an optional package-level pointer to the database. When set, handlers
-// will use it to load account data. It remains nil unless the application
-// explicitly assigns it (this keeps main.go unchanged for Option 1).
-var DB *database.SqliteDB
-
 type ServerData struct {
-	auth authData
+	auth    authData
+	manager *accountmanager.Manager
 }
 
-func RunHTTPServer(addr string, conn *grpc.ClientConn) error {
-	data := ServerData{
-		auth: authData{
-			vals: make(map[string]bool),
-		},
+func NewServerData(mgr *accountmanager.Manager) *ServerData {
+	return &ServerData{
+		auth:    authData{vals: make(map[string]bool)},
+		manager: mgr,
 	}
-	router := NewRouter(&data)
+}
+
+func RunHTTPServer(addr string, manager *accountmanager.Manager ) error {
+	data := NewServerData(manager)
+	router := NewRouter(data)
 	return http.ListenAndServe(addr, router)
 }

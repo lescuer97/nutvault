@@ -7,7 +7,7 @@ CREATE TABLE accounts (
     derivation int8 NOT NULL,
     created_at int8 NOT NULL,
     signature blob NOT NULL,
-    client_pubkey_fp TEXT UNIQUE,
+    client_pubkey_fp TEXT UNIQUE NOT NULL,
     CONSTRAINT id_pk PRIMARY KEY (id),
     CONSTRAINT derivation_unique UNIQUE (derivation)
 );

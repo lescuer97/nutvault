@@ -91,6 +91,38 @@ func (s *SqliteDB) GetAccountById(id string) (*Account, error) {
 	return &account, nil
 }
 
+func (s *SqliteDB) GetAccountsByNpub(npub []byte) ([]Account, error) {
+	accounts := []Account{}
+	stmt, err := s.Db.Prepare("SELECT active, npub, id, derivation, created_at, signature, client_pubkey_fp FROM accounts WHERE npub = ?")
+	if err != nil {
+		return accounts, fmt.Errorf(`s.Db.Prepare("SELECT active, npub, id, derivation, created_at, signature, client_pubkey_fp FROM accounts WHERE npub = ?"). %w`, err)
+	}
+	defer stmt.Close()
+
+	rows, err := stmt.Query(npub)
+	if err != nil {
+		return accounts, fmt.Errorf(`stmt.Query(args...). %w`, err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var account Account
+		var sigBytes []byte
+		err := rows.Scan(&account.Active, &account.Npub, &account.Id, &account.Derivation, &account.CreatedAt, &sigBytes)
+		if err != nil {
+			return nil, err
+		}
+
+		sig, err := schnorr.ParseSignature(sigBytes)
+		if err != nil {
+			return nil, fmt.Errorf("schnorr.ParseSignature(sigBytes). %w", err)
+		}
+		account.Signature = sig
+
+		accounts = append(accounts, account)
+	}
+	return accounts, nil
+}
 func (s *SqliteDB) GetAccountByNpub(npub []byte) (*Account, error) {
 	row := s.Db.QueryRow("SELECT active, npub, id, derivation, created_at, signature, client_pubkey_fp FROM accounts WHERE npub = ?", npub)
 
