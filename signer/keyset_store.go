@@ -15,7 +15,7 @@ type KeysetStore struct {
 	keysets       map[string]MintPublicKeyset
 	activeKeysets map[string]MintPublicKeyset
 	indexes       KeysetGenerationIndexes
-	pubkey *secp256k1.PublicKey
+	pubkey        *secp256k1.PublicKey
 }
 
 func NewKeysetStore() KeysetStore {

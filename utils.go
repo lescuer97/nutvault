@@ -75,8 +75,9 @@ func GetTlsSecurityCredential() (credentials.TransportCredentials, error) {
 	// Create TLS configuration
 	tlsConfig := &tls.Config{
 		Certificates: []tls.Certificate{serverCert},
-		ClientAuth:   tls.RequireAnyClientCert, // Require client certificate
-		ClientCAs:    certPool,                 // Verify client certificate against this CA
+		ClientAuth:   tls.RequireAndVerifyClientCert, // Require and verify client certificate
+		ClientCAs:    certPool,                       // Verify client certificate against this CA
+		MinVersion:   tls.VersionTLS13,
 	}
 
 	// Create the TLS credentials

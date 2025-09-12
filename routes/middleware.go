@@ -2,13 +2,18 @@ package routes
 
 import (
 	"context"
+	"crypto/sha256"
+	"crypto/x509"
+	"database/sql"
+	"encoding/hex"
 	"log/slog"
 	"nutmix_remote_signer/database"
 	"nutmix_remote_signer/signer"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
 
@@ -17,42 +22,49 @@ const signerInfoKey = "signerInfo"
 func AuthMiddleware(db database.SqliteDB) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
 		handler grpc.UnaryHandler) (interface{}, error) {
-
-		md, ok := metadata.FromIncomingContext(ctx)
+		// Extract peer TLS info
+		p, ok := peer.FromContext(ctx)
 		if !ok {
-			return nil, status.Error(codes.Unauthenticated, "missing metadata")
+			return nil, status.Error(codes.Unauthenticated, "no peer info")
 		}
 
-		// check the auth token
-		tokenStr := md.Get("auth-token")
-		if len(tokenStr) == 0 {
-			return nil, status.Error(codes.Unauthenticated, "missing authToken")
+		tlsInfo, ok := p.AuthInfo.(credentials.TLSInfo)
+		if !ok {
+			return nil, status.Error(codes.Unauthenticated, "no TLS info")
 		}
-		token := tokenStr[0]
 
-		authToken, err := db.GetAuthTokenByToken(token)
+		var leaf *x509.Certificate
+		if len(tlsInfo.State.VerifiedChains) > 0 && len(tlsInfo.State.VerifiedChains[0]) > 0 {
+			leaf = tlsInfo.State.VerifiedChains[0][0]
+		} else if len(tlsInfo.State.PeerCertificates) > 0 {
+			leaf = tlsInfo.State.PeerCertificates[0]
+		}
+
+		if leaf == nil {
+			return nil, status.Error(codes.Unauthenticated, "no client certificate provided")
+		}
+
+		// compute fingerprint
+		spkiDER, err := x509.MarshalPKIXPublicKey(leaf.PublicKey)
 		if err != nil {
-			slog.Warn("error getting a token", slog.String("error", err.Error()))
-			return nil, status.Error(codes.Unauthenticated, "Token does not exists")
+			slog.Warn("failed to marshal public key", slog.String("error", err.Error()))
+			return nil, status.Error(codes.Unauthenticated, "invalid client certificate")
 		}
+		sum := sha256.Sum256(spkiDER)
+		fp := hex.EncodeToString(sum[:])
 
-		account, err := db.GetAccountById(authToken.AccountId)
+		account, err := db.GetAccountByClientPubkeyFP(ctx, fp)
 		if err != nil {
-			slog.Warn("Could not get account", slog.String("error", err.Error()))
-			return nil, status.Error(codes.Unauthenticated, "acccount does not exists")
+			if err == sql.ErrNoRows {
+				slog.Warn("unknown client public key fingerprint", slog.String("fp", fp))
+				return nil, status.Error(codes.Unauthenticated, "unknown client certificate")
+			}
+			slog.Warn("error looking up account by fingerprint", slog.String("error", err.Error()))
+			return nil, status.Error(codes.Unauthenticated, "unknown client certificate")
 		}
-		if account == nil {
-			return nil, status.Error(codes.Unauthenticated, "No account")
-		}
-
-		if !authToken.Active {
-			return nil, status.Error(codes.Unauthenticated, "Inactive auth token")
-		}
-
-		// FIX: Verify signature of the account
 
 		signerInfo := signer.SignerInfo{
-			AccountId:  authToken.AccountId,
+			AccountId:  account.Id,
 			Derivation: uint32(account.Derivation),
 		}
 		// Add user info to context
