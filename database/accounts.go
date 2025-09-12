@@ -110,6 +110,18 @@ func (s *SqliteDB) GetAccountByClientPubkeyFP(ctx context.Context, fp string) (A
 	return account, nil
 }
 
+// UpdateAccountName updates the name of an account identified by id.
+func (s *SqliteDB) UpdateAccountName(id string, name string) error {
+	stmt, err := s.Db.Prepare("UPDATE accounts SET name = ? WHERE id = ?")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(name, id)
+	return err
+}
+
 type AccountWithSeeds struct {
 	*Account
 	Seeds []Seed `json:"seeds"`

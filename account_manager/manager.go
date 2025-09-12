@@ -20,9 +20,9 @@ import (
 )
 
 type Manager struct {
-	db *database.SqliteDB
-	caCertPEM   []byte
-	caKeyPEM    []byte
+	db           *database.SqliteDB
+	caCertPEM    []byte
+	caKeyPEM     []byte
 	tlsConfigDir string
 }
 
@@ -126,6 +126,15 @@ func (m *Manager) CreateAccount(ctx context.Context, pubkey *btcec.PublicKey) (*
 
 	}
 	return &acc, nil
+}
+
+// UpdateAccountName updates the name of an existing account. Returns an error
+// if the manager or database is not properly initialized.
+func (m *Manager) UpdateAccountName(ctx context.Context, id string, name string) error {
+	if m == nil || m.db == nil || m.db.Db == nil {
+		return fmt.Errorf("manager database is not initialized")
+	}
+	return m.db.UpdateAccountName(id, name)
 }
 
 func (m *Manager) GetAccountsFromNpub(pubkey *secp256k1.PublicKey) ([]database.Account, error) {
