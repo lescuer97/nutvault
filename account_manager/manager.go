@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -70,8 +71,8 @@ func (m *Manager) CreateAccount(ctx context.Context, pubkey *btcec.PublicKey) (*
 		Id:         id,
 		Derivation: derivationInt,
 		CreatedAt:  time.Now().Unix(),
-		Signature:  nil, // placeholder not parsed back
 	}
+	// schnorr.ParseSignature()
 
 	// If CA credentials are configured, create TLS key/cert and save to disk.
 	if len(m.caCertPEM) > 0 && len(m.caKeyPEM) > 0 {
@@ -94,6 +95,7 @@ func (m *Manager) CreateAccount(ctx context.Context, pubkey *btcec.PublicKey) (*
 		acc.ClientPubkeyFP = hex.EncodeToString(sha[:])
 	}
 
+	log.Printf("\n account: %+v", acc)
 	err := m.db.CreateAccount(&acc)
 	if err != nil {
 		return nil, fmt.Errorf("m.db.CreateAccount(&acc). %w", err)

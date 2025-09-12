@@ -2,14 +2,10 @@ package database
 
 import (
 	"context"
-	"crypto/sha256"
 	"database/sql"
 	"fmt"
-	"log"
 	"time"
 
-	"github.com/btcsuite/btcd/btcec/v2"
-	"github.com/decred/dcrd/dcrec/secp256k1/v4/schnorr"
 	"github.com/fxamacker/cbor/v2"
 )
 
@@ -20,44 +16,24 @@ type Account struct {
 	Name           string `json:"name"   cbor:"name" db:"name"`
 	ClientPubkeyFP string `json:"client_pubkey_fp" db:"client_pubkey_fp" cbor:"client_pubkey_fp"`
 	// NOTE: derivation = sha256sum(npub + id)
-	Derivation uint32             `json:"derivation" cbor:"derivation"`
-	CreatedAt  int64              `json:"created_at" cbor:"created_at"`
-	Signature  *schnorr.Signature `json:"signature" cbor:"-"`
+	Derivation uint32 `json:"derivation" cbor:"derivation"`
+	CreatedAt  int64  `json:"created_at" cbor:"created_at"`
+	// Signature removed pending implementation
+	// Signature  *schnorr.Signature `json:"signature" cbor:"-"`
 }
 
-func (a *Account) VerifySignature(pubkey btcec.PublicKey) (bool, error) {
-	msg, err := cbor.Marshal(a)
-	if err != nil {
-		return false, fmt.Errorf("cbor.Marshal(a). %w", err)
-	}
-	hash := sha256.Sum256(msg)
-	return a.Signature.Verify(hash[:], &pubkey), nil
-}
-
-func (a *Account) Sign(privKey *btcec.PrivateKey) error {
-	msg, err := cbor.Marshal(a)
-	if err != nil {
-		return fmt.Errorf("cbor.Marshal(a). %w", err)
-	}
-	hash := sha256.Sum256(msg)
-	signature, err := schnorr.Sign(privKey, hash[:])
-	if err != nil {
-		return fmt.Errorf("schnorr.Sign(privKey, hash[:]). %w", err)
-	}
-
-	a.Signature = signature
-	log.Panicf("need to implement Signature Verification")
-	return nil
-}
+// Signature-related functions are commented out until signature handling
+// is implemented correctly. See TODO/FIXME comments in the original
+// implementation.
 
 func (s *SqliteDB) CreateAccount(account *Account) error {
-	stmt, err := s.Db.Prepare("INSERT INTO accounts (active, npub, id, name, derivation, created_at, signature, client_pubkey_fp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+	stmt, err := s.Db.Prepare("INSERT INTO accounts (active, npub, id, name, derivation, created_at, client_pubkey_fp) VALUES (?, ?, ?, ?, ?, ?, ?)")
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
 
-	_, err = stmt.Exec(account.Active, account.Npub, account.Id, account.Name, account.Derivation, time.Now().Unix(), account.Signature.Serialize(), account.ClientPubkeyFP)
+	_, err = stmt.Exec(account.Active, account.Npub, account.Id, account.Name, account.Derivation, time.Now().Unix(), account.ClientPubkeyFP)
 	return err
 }
 
@@ -73,30 +49,22 @@ func (s *SqliteDB) FlipAccountActive(id string) error {
 }
 
 func (s *SqliteDB) GetAccountById(id string) (*Account, error) {
-	row := s.Db.QueryRow("SELECT active, npub, id, name, derivation, created_at, signature, client_pubkey_fp FROM accounts WHERE id = ?", id)
+	row := s.Db.QueryRow("SELECT active, npub, id, name, derivation, created_at, client_pubkey_fp FROM accounts WHERE id = ?", id)
 
 	var account Account
-	var sigBytes []byte
-	err := row.Scan(&account.Active, &account.Npub, &account.Id, &account.Name, &account.Derivation, &account.CreatedAt, &sigBytes, &account.ClientPubkeyFP)
+	err := row.Scan(&account.Active, &account.Npub, &account.Id, &account.Name, &account.Derivation, &account.CreatedAt, &account.ClientPubkeyFP)
 	if err != nil {
 		return nil, err
 	}
-
-	// FIX: Uncomment signature setup and fix signature
-	// sig, err := schnorr.ParseSignature(sigBytes)
-	// if err != nil {
-	//  return nil, fmt.Errorf("schnorr.ParseSignature(sigBytes). %w", err)
-	// }
-	//authToken.Signature = nil
 
 	return &account, nil
 }
 
 func (s *SqliteDB) GetAccountsByNpub(npub []byte) ([]Account, error) {
 	accounts := []Account{}
-	stmt, err := s.Db.Prepare("SELECT active, npub, id, name, derivation, created_at, signature, client_pubkey_fp FROM accounts WHERE npub = ?")
+	stmt, err := s.Db.Prepare("SELECT active, npub, id, name, derivation, created_at, client_pubkey_fp FROM accounts WHERE npub = ?")
 	if err != nil {
-		return accounts, fmt.Errorf(`s.Db.Prepare("SELECT active, npub, id, name, derivation, created_at, signature, client_pubkey_fp FROM accounts WHERE npub = ?"). %w`, err)
+		return accounts, fmt.Errorf(`s.Db.Prepare("SELECT active, npub, id, name, derivation, created_at, client_pubkey_fp FROM accounts WHERE npub = ?"). %w`, err)
 	}
 	defer stmt.Close()
 
@@ -108,17 +76,10 @@ func (s *SqliteDB) GetAccountsByNpub(npub []byte) ([]Account, error) {
 
 	for rows.Next() {
 		var account Account
-		var sigBytes []byte
-		err := rows.Scan(&account.Active, &account.Npub, &account.Id, &account.Name, &account.Derivation, &account.CreatedAt, &sigBytes, &account.ClientPubkeyFP)
+		err := rows.Scan(&account.Active, &account.Npub, &account.Id, &account.Name, &account.Derivation, &account.CreatedAt, &account.ClientPubkeyFP)
 		if err != nil {
 			return nil, err
 		}
-
-		sig, err := schnorr.ParseSignature(sigBytes)
-		if err != nil {
-			return nil, fmt.Errorf("schnorr.ParseSignature(sigBytes). %w", err)
-		}
-		account.Signature = sig
 
 		accounts = append(accounts, account)
 	}
@@ -126,36 +87,25 @@ func (s *SqliteDB) GetAccountsByNpub(npub []byte) ([]Account, error) {
 }
 
 func (s *SqliteDB) GetAccountByNpub(npub []byte) (*Account, error) {
-	row := s.Db.QueryRow("SELECT active, npub, id, name, derivation, created_at, signature, client_pubkey_fp FROM accounts WHERE npub = ?", npub)
+	row := s.Db.QueryRow("SELECT active, npub, id, name, derivation, created_at, client_pubkey_fp FROM accounts WHERE npub = ?", npub)
 
 	var account Account
-	var sigBytes []byte
-	err := row.Scan(&account.Active, &account.Npub, &account.Id, &account.Name, &account.Derivation, &account.CreatedAt, &sigBytes, &account.ClientPubkeyFP)
+	err := row.Scan(&account.Active, &account.Npub, &account.Id, &account.Name, &account.Derivation, &account.CreatedAt, &account.ClientPubkeyFP)
 	if err != nil {
 		return nil, err
 	}
-
-	sig, err := schnorr.ParseSignature(sigBytes)
-	if err != nil {
-		return nil, fmt.Errorf("schnorr.ParseSignature(sigBytes). %w", err)
-	}
-	account.Signature = sig
 
 	return &account, nil
 }
 
 func (s *SqliteDB) GetAccountByClientPubkeyFP(ctx context.Context, fp string) (Account, error) {
-	row := s.Db.QueryRow("SELECT active, npub, id, name, derivation, created_at, signature, client_pubkey_fp FROM accounts WHERE client_pubkey_fp = ?", fp)
+	row := s.Db.QueryRow("SELECT active, npub, id, name, derivation, created_at, client_pubkey_fp FROM accounts WHERE client_pubkey_fp = ?", fp)
 
 	var account Account
-	var sigBytes []byte
-	err := row.Scan(&account.Active, &account.Npub, &account.Id, &account.Name, &account.Derivation, &account.CreatedAt, &sigBytes, &account.ClientPubkeyFP)
+	err := row.Scan(&account.Active, &account.Npub, &account.Id, &account.Name, &account.Derivation, &account.CreatedAt, &account.ClientPubkeyFP)
 	if err != nil {
 		return Account{}, err
 	}
-
-	// FIXME: signature parsing
-	account.Signature = nil
 
 	return account, nil
 }
@@ -168,7 +118,7 @@ type AccountWithSeeds struct {
 func (s *SqliteDB) GetAccountsWithSeeds() ([]AccountWithSeeds, error) {
 	query := `
 		SELECT
-			a.active, a.npub, a.id, a.name, a.derivation, a.created_at, a.signature,
+			a.active, a.npub, a.id, a.name, a.derivation, a.created_at,
 			s.active, s.unit, s.id, s.created_at, s.input_fee_ppk, s.version, s.legacy, s.amounts, s.account_id
 		FROM
 			accounts a
@@ -190,20 +140,13 @@ func (s *SqliteDB) GetAccountsWithSeeds() ([]AccountWithSeeds, error) {
 		var seedUnit, seedId, seedAmounts, seedAccountId sql.NullString
 		var seedCreatedAt, seedInputFeePpk, seedVersion sql.NullInt64
 		var seedLegacy sql.NullBool
-		var sigBytes []byte
 		err := rows.Scan(
-			&account.Active, &account.Npub, &account.Id, &account.Name, &account.Derivation, &account.CreatedAt, &sigBytes,
+			&account.Active, &account.Npub, &account.Id, &account.Name, &account.Derivation, &account.CreatedAt,
 			&seedActive, &seedUnit, &seedId, &seedCreatedAt, &seedInputFeePpk, &seedVersion, &seedLegacy, &seedAmounts, &seedAccountId,
 		)
 		if err != nil {
 			return nil, err
 		}
-		// FIX: Uncomment signature setup and fix signature
-		// sig, err := schnorr.ParseSignature(sigBytes)
-		// if err != nil {
-		//  return nil, fmt.Errorf("schnorr.ParseSignature(sigBytes). %w", err)
-		// }
-		account.Signature = nil
 
 		if _, ok := accountsMap[account.Id]; !ok {
 			accountsMap[account.Id] = &AccountWithSeeds{
@@ -230,14 +173,10 @@ func (s *SqliteDB) GetAccountsWithSeeds() ([]AccountWithSeeds, error) {
 			accountsMap[account.Id].Seeds = append(accountsMap[account.Id].Seeds, seed)
 		}
 	}
-	if err = rows.Err(); err != nil {
-		return nil, err
-	}
 
-	accountsWithSeeds := make([]AccountWithSeeds, 0, len(accountsMap))
-	for _, accountWithSeeds := range accountsMap {
-		accountsWithSeeds = append(accountsWithSeeds, *accountWithSeeds)
+	result := []AccountWithSeeds{}
+	for _, v := range accountsMap {
+		result = append(result, *v)
 	}
-
-	return accountsWithSeeds, nil
+	return result, nil
 }
