@@ -16,7 +16,6 @@ type authData struct {
 }
 
 func generateNonceHex() (string, error) {
-
 	// generate random Nonce
 	nonce := make([]byte, 32)  // create a slice with length 16 for the nonce
 	_, err := rand.Read(nonce) // read random bytes into the nonce slice
@@ -69,7 +68,7 @@ func NewServerData(mgr *accountmanager.Manager) *ServerData {
 	}
 }
 
-func RunHTTPServer(addr string, manager *accountmanager.Manager ) error {
+func RunHTTPServer(addr string, manager *accountmanager.Manager) error {
 	data := NewServerData(manager)
 	router := NewRouter(data)
 	return http.ListenAndServe(addr, router)

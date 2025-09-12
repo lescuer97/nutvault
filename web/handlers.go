@@ -3,6 +3,7 @@ package web
 // NOTE: New UI handlers (dashboard + createkey) are implemented in web/ui_handlers.go
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 
 	"nutmix_remote_signer/web/templates"
 
+	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/nbd-wtf/go-nostr"
 )
@@ -77,13 +79,28 @@ func LoginPostHandler(serverData *ServerData, secret []byte) http.HandlerFunc {
 			return
 		}
 
-		token, err := makeJWTToken(secret)
+		pubkeyBytes, err := hex.DecodeString(nostrEvent.String())
+		if err != nil {
+			slog.Warn("hex.DecodeString(nostrEvent.String())", slog.String("error", err.Error()))
+			http.Error(w, "Something went wrong", http.StatusInternalServerError)
+			return
+		}
 
+		pubkey, err := btcec.ParsePubKey(pubkeyBytes)
+		if err != nil {
+			slog.Warn("btcec.ParsePubKey(pubkeyBytes)", slog.String("error", err.Error()))
+			http.Error(w, "Something went wrong", http.StatusInternalServerError)
+			return
+		}
+
+		token, err := makeJWTToken(secret, pubkey)
 		if err != nil {
 			slog.Warn("Could not makeJWTToken", slog.String("error", err.Error()))
 			http.Error(w, "Something went wrong", http.StatusInternalServerError)
 			return
 		}
+
+		// serverData.auth.
 		// Create a new cookie
 		cookie := &http.Cookie{
 			Name:     AdminAuthKey,
@@ -103,9 +120,12 @@ func GetAccountHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-func makeJWTToken(secret []byte) (string, error) {
+func makeJWTToken(secret []byte, pubkey *btcec.PublicKey) (string, error) {
+	claims := jwt.RegisteredClaims{
+		Subject: hex.EncodeToString(pubkey.SerializeCompressed()),
+	}
 
-	token := jwt.New(jwt.SigningMethodHS256)
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	string, err := token.SignedString(secret)
 	if err != nil {
 		return "", fmt.Errorf("token.SignedString(secret) %v", err)

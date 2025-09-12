@@ -68,7 +68,7 @@ func (m *Manager) CreateAccount(ctx context.Context, pubkey *btcec.PublicKey) (*
 	return &acc, nil
 }
 
-func (m *Manager) GetAccountFromNpub(pubkey *secp256k1.PublicKey) ([]database.Account, error) {
+func (m *Manager) GetAccountsFromNpub(pubkey *secp256k1.PublicKey) ([]database.Account, error) {
 	accounts, err := m.db.GetAccountsByNpub(pubkey.SerializeCompressed())
 	if err != nil {
 		return nil, err

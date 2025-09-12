@@ -1,14 +1,21 @@
 package web
 
 import (
+	"context"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"net/http"
 
+	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/golang-jwt/jwt/v5"
 )
 
 const AdminAuthKey = "admin-cookie"
+
+type contextKey string
+
+const audienceKey contextKey = "audience"
 
 func AuthMiddleware(secret []byte) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -69,7 +76,43 @@ func AuthMiddleware(secret []byte) func(http.Handler) http.Handler {
 				return
 			}
 
-			next.ServeHTTP(w, r)
+			// Extract audience claim
+			claims, ok := token.Claims.(jwt.MapClaims)
+			if !ok {
+				http.Error(w, "invalid claims", http.StatusUnauthorized)
+				return
+			}
+
+			aud, ok := claims["aud"].(string)
+			if !ok {
+				http.Error(w, "audience claim missing or not string", http.StatusUnauthorized)
+				return
+			}
+
+			// Store in context
+			ctx := context.WithValue(r.Context(), audienceKey, aud)
+			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+// Helper to fetch the audience in handlers
+func GetAudience(r *http.Request) (*btcec.PublicKey, error) {
+	val := r.Context().Value(audienceKey)
+	aud, ok := val.(string)
+
+	if !ok {
+		return nil, fmt.Errorf("could nto get the public key from login")
+	}
+
+	pubBytes, err := hex.DecodeString(aud)
+	if err != nil {
+		return nil, fmt.Errorf("hex.DecodeString(aud). %w", err)
+	}
+	pubkey, err := btcec.ParsePubKey(pubBytes)
+	if err != nil {
+		return nil, fmt.Errorf("btcec.ParsePubKey(pubBytes). %w", err)
+	}
+
+	return pubkey, nil
 }
