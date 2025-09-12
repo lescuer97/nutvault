@@ -19,6 +19,8 @@ import (
 // CreateAndSaveTLSKeyFromCA creates a new TLS certificate/key pair signed by the provided
 // CA certificate and private key (both PEM encoded). It saves the resulting cert and key
 // into configDir using the provided name (files: <name>-cert.pem and <name>-key.pem).
+// Additionally, it will also write a convenience cert filename <name>.pem containing
+// the same certificate PEM for compatibility with callers that expect <name>.pem.
 // It returns the PEM encoded public key corresponding to the generated private key.
 // The function will fail if a file with the same name already exists in the target directory.
 func CreateAndSaveTLSKeyFromCA(caCertPEM, caKeyPEM []byte, name, configDir string) ([]byte, error) {
@@ -85,7 +87,6 @@ func CreateAndSaveTLSKeyFromCA(caCertPEM, caKeyPEM []byte, name, configDir strin
 	}
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyBytes})
 
-	// Save to disk
 	if err := SaveTLSKey(configDir, name, certPEM, keyPEM); err != nil {
 		return nil, err
 	}
@@ -101,7 +102,8 @@ func CreateAndSaveTLSKeyFromCA(caCertPEM, caKeyPEM []byte, name, configDir strin
 
 // SaveTLSKey writes certPEM and keyPEM into configDir using the provided name.
 // It ensures that files do not already exist and sets conservative file permissions.
-// Files produced are: <configDir>/<name>-cert.pem and <configDir>/<name>-key.pem
+// Files produced are: <configDir>/<name>-cert.pem, <configDir>/<name>-key.pem, and
+// a convenience alias <configDir>/<name>.pem which contains the certificate PEM.
 func SaveTLSKey(configDir, name string, certPEM, keyPEM []byte) error {
 	if name == "" {
 		return fmt.Errorf("name must not be empty")

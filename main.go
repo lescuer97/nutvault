@@ -15,7 +15,7 @@ import (
 	"strconv"
 	"time"
 
-	"nutmix_remote_signer/account_manager"
+	accountmanager "nutmix_remote_signer/account_manager"
 	"nutmix_remote_signer/web"
 
 	"github.com/joho/godotenv"
@@ -61,9 +61,6 @@ func main() {
 		log.Panicf(`database.DatabaseSetup(ctx, "migrations"). %+v`, err)
 	}
 	defer sqlite.Db.Close()
-
-	// create account manager
-	mgr := accountmanager.NewManager(&sqlite)
 
 	// get expirty time from env var if not use default
 	expiryTime := time.Now()
@@ -127,8 +124,33 @@ func main() {
 		Signer: signer,
 	})
 
+	// create account manager
+	var caCertPEM []byte
+	var caKeyPEM []byte
+
+	certPath := os.Getenv("CA_CERT_PATH")
+	keyPath := os.Getenv("CA_KEY_PATH")
+	if certPath == "" || keyPath == "" {
+		log.Panicf("both CA_CERT_PATH and CA_KEY_PATH must be set together")
+	}
+	if certPath != "" || keyPath != "" {
+		// read files
+		certBytes, err := os.ReadFile(certPath)
+		if err != nil {
+			log.Panicf("failed to read CA cert file: %v", err)
+		}
+		keyBytes, err := os.ReadFile(keyPath)
+		if err != nil {
+			log.Panicf("failed to read CA key file: %v", err)
+		}
+		caCertPEM = certBytes
+		caKeyPEM = keyBytes
+	}
+
 	// Serve gRPC requests
 	go func() {
+		mgr := accountmanager.NewManager(&sqlite, caCertPEM, caKeyPEM, homeDir + "certificates")
+
 		slog.Info("Starting web server...", slog.String("port", abstractSocket))
 		// Construct ServerData with the manager so UI handlers can use it
 		sd := web.NewServerData(&mgr)

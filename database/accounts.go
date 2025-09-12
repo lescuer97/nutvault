@@ -96,7 +96,7 @@ func (s *SqliteDB) GetAccountsByNpub(npub []byte) ([]Account, error) {
 	accounts := []Account{}
 	stmt, err := s.Db.Prepare("SELECT active, npub, id, name, derivation, created_at, signature, client_pubkey_fp FROM accounts WHERE npub = ?")
 	if err != nil {
-		return accounts, fmt.Errorf(`s.Db.Prepare("SELECT active, npub, id, derivation, created_at, signature, client_pubkey_fp FROM accounts WHERE npub = ?"). %w`, err)
+		return accounts, fmt.Errorf(`s.Db.Prepare("SELECT active, npub, id, name, derivation, created_at, signature, client_pubkey_fp FROM accounts WHERE npub = ?"). %w`, err)
 	}
 	defer stmt.Close()
 
@@ -124,6 +124,7 @@ func (s *SqliteDB) GetAccountsByNpub(npub []byte) ([]Account, error) {
 	}
 	return accounts, nil
 }
+
 func (s *SqliteDB) GetAccountByNpub(npub []byte) (*Account, error) {
 	row := s.Db.QueryRow("SELECT active, npub, id, name, derivation, created_at, signature, client_pubkey_fp FROM accounts WHERE npub = ?", npub)
 
