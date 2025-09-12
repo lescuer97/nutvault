@@ -6,6 +6,7 @@ import (
 	"log"
 	"log/slog"
 	"nutmix_remote_signer/database"
+	"time"
 
 	"github.com/elnosh/gonuts/crypto"
 	"github.com/lescuer97/nutmix/api/cashu"
@@ -19,6 +20,8 @@ type MintPublicKeyset struct {
 	Keys              map[uint64][]byte
 	InputFeePpk       uint
 	Legacy            bool
+	Version           uint64
+	FinalExpiry       time.Time
 }
 type MintKeyset struct {
 	Id                []byte
@@ -27,6 +30,8 @@ type MintKeyset struct {
 	DerivationPathIdx uint32
 	Keys              map[uint64]crypto.KeyPair
 	InputFeePpk       uint
+	Version           uint64
+	FinalExpiry       time.Time
 }
 
 func MakeMintPublickeys(mintKey MintKeyset) MintPublicKeyset {
@@ -37,6 +42,8 @@ func MakeMintPublickeys(mintKey MintKeyset) MintPublicKeyset {
 		DerivationPathIdx: mintKey.DerivationPathIdx,
 		Keys:              make(map[uint64][]byte, len(mintKey.Keys)),
 		InputFeePpk:       uint(mintKey.InputFeePpk),
+		Version:           mintKey.Version,
+		FinalExpiry:       mintKey.FinalExpiry,
 	}
 
 	for key, keypair := range mintKey.Keys {
@@ -74,8 +81,8 @@ func (s *Signer) GenerateMintKeysFromPublicKeysets(keysetIndex KeysetGenerationI
 	if !exists {
 		return privateKeysets, fmt.Errorf("signer account does not exists. %w", err)
 	}
-	slog.Info("Generating private keys for account", slog.String("account", signerInfo.AccountId))
-	for i, val := range signer.keysets {
+	keysetsMap := signer.GetKeysetsMapCopy()
+	for i, val := range keysetsMap {
 
 		keysetAmounts, exists := keysetIndex[hex.EncodeToString(val.Id)]
 		if !exists {
@@ -83,15 +90,15 @@ func (s *Signer) GenerateMintKeysFromPublicKeysets(keysetIndex KeysetGenerationI
 		}
 
 		hexId := hex.EncodeToString(val.Id)
-		privateKeysets[i] = MintKeyset{Id: val.Id, Unit: val.Unit, DerivationPathIdx: val.DerivationPathIdx, Active: val.Active, InputFeePpk: val.InputFeePpk}
-		keyset := MintKeyset{Id: val.Id, Unit: val.Unit, DerivationPathIdx: val.DerivationPathIdx, Active: val.Active, InputFeePpk: val.InputFeePpk, Keys: make(map[uint64]crypto.KeyPair)}
+		privateKeysets[i] = MintKeyset{Id: val.Id, Unit: val.Unit, DerivationPathIdx: val.DerivationPathIdx, Active: val.Active, InputFeePpk: val.InputFeePpk, FinalExpiry: val.FinalExpiry}
+		keyset := MintKeyset{Id: val.Id, Unit: val.Unit, DerivationPathIdx: val.DerivationPathIdx, Active: val.Active, InputFeePpk: val.InputFeePpk, Keys: make(map[uint64]crypto.KeyPair), FinalExpiry: val.FinalExpiry}
 
 		unit, err := cashu.UnitFromString(val.Unit)
 		if err != nil {
 			return privateKeysets, fmt.Errorf("cashu.UnitFromString(val.Unit). %w", err)
 		}
 
-		seed := database.Seed{Active: val.Active, Id: hexId, Unit: val.Unit, Version: int(val.DerivationPathIdx), InputFeePpk: val.InputFeePpk, Legacy: val.Legacy, AccountId: signerInfo.AccountId}
+		seed := database.Seed{Active: val.Active, Id: hexId, Unit: val.Unit, Version: uint64(val.DerivationPathIdx), InputFeePpk: val.InputFeePpk, Legacy: val.Legacy}
 		if val.Legacy {
 			err := LegacyKeyDerivation(derivedSignerKey, &keyset, seed, unit, keysetAmounts)
 			if err != nil {

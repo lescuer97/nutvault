@@ -10,16 +10,15 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-const NutvaultName = ".nutvault"
+const NutvaultName = "nutvault"
 
 func GetConfigDirectory() (string, error) {
-
-	homedir, err := os.UserConfigDir()
+	configDir, err := os.UserConfigDir()
 	if err != nil {
 		return "", fmt.Errorf("os.UserConfigDir(). %w", err)
 	}
 
-	rataskerDir := homedir + "/" + NutvaultName
+	rataskerDir := configDir + "/" + NutvaultName
 	err = MakeSureFilePathExists(rataskerDir, "")
 	if err != nil {
 		return "", fmt.Errorf("MakeSureFilePathExists(rataskerDir ). %w", err)

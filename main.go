@@ -11,6 +11,8 @@ import (
 	"nutmix_remote_signer/routes"
 	"nutmix_remote_signer/signer"
 	"os"
+	"strconv"
+	"time"
 
 	"nutmix_remote_signer/web"
 
@@ -32,10 +34,10 @@ func main() {
 	}
 
 	logFile, err := os.OpenFile(homeDir+"logs", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0764)
-	defer logFile.Close()
 	if err != nil {
 		log.Panicf("os.OpenFile(pathToProjectLogFile, os.O_RDWR|os.O_CREATE, 0764) %+v", err)
 	}
+	defer logFile.Close()
 
 	w := io.MultiWriter(os.Stdout, logFile)
 
@@ -53,12 +55,36 @@ func main() {
 
 	ctx := context.Background()
 	sqlite, err := database.DatabaseSetup(ctx, homeDir)
-	defer sqlite.Db.Close()
 	if err != nil {
 		log.Panicf(`database.DatabaseSetup(ctx, "migrations"). %+v`, err)
 	}
+	defer sqlite.Db.Close()
 
-	signer, err := signer.SetupLocalSigner(sqlite)
+	// get expirty time from env var if not use default
+	expiryTime := time.Now()
+	expiryHoursEnvStr := os.Getenv("KEYSET_EXPIRY_HOURS")
+	if expiryHoursEnvStr != "" {
+		expiryHoursEnv, err := strconv.ParseUint(expiryHoursEnvStr, 10, 64)
+		if err != nil {
+			slog.Warn("KEYSET_EXPIRY_HOURS is not set correctly. Using default of 720 hours.")
+			expiryTime = expiryTime.Add(720 * time.Hour)
+		} else {
+			expiryTime = expiryTime.Add(time.Duration(expiryHoursEnv) * time.Hour)
+		}
+	} else {
+		expiryTime = expiryTime.Add(720 * time.Hour)
+	}
+	autoRotate, err := strconv.ParseBool(os.Getenv("AUTO_ROTATE"))
+	if err != nil {
+		autoRotate = false
+	}
+
+	config := signer.Config{
+		ExpireTime: expiryTime,
+		AutoRotate: autoRotate,
+	}
+
+	signer, err := signer.SetupLocalSigner(sqlite, config)
 	if err != nil {
 		log.Panicf(`signer.SetupLocalSigner(sqlite). %+v`, err)
 	}

@@ -3,6 +3,7 @@ package routes
 import (
 	"errors"
 	"fmt"
+	"log"
 	sig "nutmix_remote_signer/gen/signer"
 	"nutmix_remote_signer/signer"
 	"nutmix_remote_signer/utils"
@@ -52,7 +53,17 @@ func ConvertToKeysResponse(pubkey []byte, keys []signer.MintPublicKeyset) *sig.K
 			Active:      mintPubKey.Active,
 			InputFeePpk: uint64(mintPubKey.InputFeePpk),
 			Keys:        &keys,
+			Version:     mintPubKey.Version,
+			FinalExpiry: uint64(mintPubKey.FinalExpiry.Unix()),
 		}
+
+		if keyset.Keys == nil {
+			log.Panicf("Keys should always be set should always be set")
+		}
+		if keyset.Id == nil {
+			log.Panicf("Id should always be set")
+		}
+
 		response.Keysets.Keysets[i] = &keyset
 	}
 
@@ -71,17 +82,26 @@ func ConvertToKeyRotationResponse(key signer.MintPublicKeyset) *sig.KeyRotationR
 		Active:      key.Active,
 		InputFeePpk: uint64(key.InputFeePpk),
 		Keys:        &keys,
+		Version:     key.Version,
+		FinalExpiry: uint64(key.FinalExpiry.Unix()),
 	}
 
+	if keyset.Keys == nil {
+		log.Panicf("Keys should always be set should always be set")
+	}
+	if keyset.Id == nil {
+		log.Panicf("Id should always be set")
+	}
 	response.Keyset = &keyset
 
 	return &response
 }
 
 type RotationRequest struct {
-	Fee     uint64
-	Unit    cashu.Unit
-	Amounts []uint64
+	Fee         uint64
+	Unit        cashu.Unit
+	Amounts     []uint64
+	FinalExpiry uint64
 }
 
 func ConvertSigRotationRequest(req *sig.RotationRequest) (RotationRequest, error) {
@@ -92,6 +112,7 @@ func ConvertSigRotationRequest(req *sig.RotationRequest) (RotationRequest, error
 	}
 	rotationRequest.Fee = req.InputFeePpk
 	rotationRequest.Amounts = req.Amounts
+	rotationRequest.FinalExpiry = req.GetFinalExpiry()
 
 	unit, err := ConvertSigUnitToCashuUnit(req.Unit)
 	if err != nil {

@@ -261,7 +261,7 @@ func (s *SqliteDB) GetAccountsWithSeeds() ([]AccountWithSeeds, error) {
 				Id:          seedId.String,
 				CreatedAt:   seedCreatedAt.Int64,
 				InputFeePpk: uint(seedInputFeePpk.Int64),
-				Version:     int(seedVersion.Int64),
+				Version:     uint64(seedVersion.Int64),
 				Legacy:      seedLegacy.Bool,
 				AccountId:   seedAccountId.String,
 			}
