@@ -96,31 +96,29 @@ func (m *Manager) CreateAccount(ctx context.Context, pubkey *btcec.PublicKey) (*
 	}
 
 	// If CA credentials are configured, create TLS key/cert and save to disk.
-	if len(m.caCertPEM) > 0 && len(m.caKeyPEM) > 0 {
-		// ensure tlsConfigDir is set (should have been set in NewManager)
-		if m.tlsConfigDir == "" {
-			home, err := os.UserHomeDir()
-			if err != nil {
-				return nil, fmt.Errorf("os.UserHomeDir: %w", err)
-			}
-			m.tlsConfigDir = filepath.Join(home, ".config", "nutvault", "certificates")
-			// attempt to create if missing
-			if err := os.MkdirAll(m.tlsConfigDir, 0700); err != nil {
-				return nil, fmt.Errorf("failed to create tls config dir: %w", err)
-			}
-		}
-
-		pubPEM, err := utils.CreateAndSaveTLSKeyFromCA(m.caCertPEM, m.caKeyPEM, id, m.tlsConfigDir)
+	// ensure tlsConfigDir is set (should have been set in NewManager)
+	if m.tlsConfigDir == "" {
+		home, err := os.UserHomeDir()
 		if err != nil {
-			// Fail creation if TLS key generation fails
-			return nil, fmt.Errorf("CreateAndSaveTLSKeyFromCA: %w", err)
+			return nil, fmt.Errorf("os.UserHomeDir: %w", err)
 		}
-		sha := sha256.Sum256(pubPEM)
-		acc.ClientPubkeyFP = hex.EncodeToString(sha[:])
+		m.tlsConfigDir = filepath.Join(home, ".config", "nutvault", "certificates")
+		// attempt to create if missing
+		if err := os.MkdirAll(m.tlsConfigDir, 0700); err != nil {
+			return nil, fmt.Errorf("failed to create tls config dir: %w", err)
+		}
 	}
 
+	pubPEM, err := utils.CreateAndSaveTLSKeyFromCA(m.caCertPEM, m.caKeyPEM, id, m.tlsConfigDir)
+	if err != nil {
+		// Fail creation if TLS key generation fails
+		return nil, fmt.Errorf("CreateAndSaveTLSKeyFromCA: %w", err)
+	}
+	sha := sha256.Sum256(pubPEM)
+	acc.ClientPubkeyFP = hex.EncodeToString(sha[:])
+
 	log.Printf("\n account: %+v", acc)
-	err := m.db.CreateAccount(&acc)
+	err = m.db.CreateAccount(&acc)
 	if err != nil {
 		return nil, fmt.Errorf("m.db.CreateAccount(&acc). %w", err)
 

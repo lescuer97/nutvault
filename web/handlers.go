@@ -79,7 +79,7 @@ func LoginPostHandler(serverData *ServerData, secret []byte) http.HandlerFunc {
 			return
 		}
 
-		pubkeyBytes, err := hex.DecodeString("02" +nostrEvent.PubKey)
+		pubkeyBytes, err := hex.DecodeString("02" + nostrEvent.PubKey)
 		if err != nil {
 			slog.Warn("hex.DecodeString(nostrEvent.String())", slog.String("error", err.Error()))
 			http.Error(w, "Something went wrong", http.StatusInternalServerError)

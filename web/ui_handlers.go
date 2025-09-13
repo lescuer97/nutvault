@@ -1,6 +1,7 @@
 package web
 
 import (
+	"log/slog"
 	"net/http"
 
 	"nutmix_remote_signer/web/templates"
@@ -36,13 +37,14 @@ func CreateKeyHandler(serverData *ServerData) http.HandlerFunc {
 			http.Error(w, "Invalid login", http.StatusUnauthorized)
 			return
 		}
-			acct, err := serverData.manager.CreateAccount(r.Context(), pubkey)
-			if err != nil {
-				http.Error(w, "failed to create account", http.StatusInternalServerError)
-				return
-			}
-
-			templates.KeyCard(*acct).Render(r.Context(), w)
+		acct, err := serverData.manager.CreateAccount(r.Context(), pubkey)
+		if err != nil {
+			slog.Error("serverData.manager.CreateAccount(r.Context(), pubkey)", slog.Any("error", err))
+			http.Error(w, "failed to create account", http.StatusInternalServerError)
 			return
+		}
+
+		templates.KeyCard(*acct).Render(r.Context(), w)
+		return
 	}
 }
