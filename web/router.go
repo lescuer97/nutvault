@@ -55,10 +55,11 @@ func NewRouter(serverData *ServerData) http.Handler {
 		r.Get("/", DashboardHandler(serverData))
 		r.Post("/createkey", CreateKeyHandler(serverData))
 
-		// page for showing a dashboard
+		// page for showing a dashboard for a signer
 		r.Get("/signer/{id}", SignerDashboard(serverData))
 
-		r.Get("/cert/{id}", DashboardHandler(serverData))
+		// Certificate endpoints for HTMX requests: {which} is one of: ca, cert, key
+		r.Get("/cert/{id}/{which}", CertHandler(serverData))
 	})
 
 	return router

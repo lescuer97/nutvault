@@ -192,3 +192,19 @@ func (m *Manager) GetCertificate(name string) ([]byte, error) {
 
 	return nil, fmt.Errorf("could not read certificate: tried %s (%v) and %s (%v)", p1, err, p2, err2)
 }
+
+// GetCACertPEM returns the CA certificate PEM configured for the manager (may be empty)
+func (m *Manager) GetCACertPEM() []byte {
+	if m == nil {
+		return nil
+	}
+	return m.caCertPEM
+}
+
+// TlsConfigDir returns the configured TLS certificates directory
+func (m *Manager) TlsConfigDir() string {
+	if m == nil {
+		return ""
+	}
+	return m.tlsConfigDir
+}
