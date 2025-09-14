@@ -142,6 +142,13 @@ func (m *Manager) GetAccountsFromNpub(pubkey *secp256k1.PublicKey) ([]database.A
 	}
 	return accounts, nil
 }
+func (m *Manager) GetAccountById(id string) (*database.Account, error) {
+	account, err := m.db.GetAccountById(id)
+	if err != nil {
+		return nil, err
+	}
+	return account, nil
+}
 
 func makeDerivation(pubkey *secp256k1.PublicKey, id []byte) []byte {
 	bytes := []byte{}

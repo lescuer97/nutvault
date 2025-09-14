@@ -1,10 +1,13 @@
 package web
 
 import (
+	"database/sql"
 	"log/slog"
 	"net/http"
 
 	"nutmix_remote_signer/web/templates"
+
+	"github.com/go-chi/chi/v5"
 )
 
 // DashboardHandler renders the accounts dashboard (uses package-level DB if available)
@@ -46,5 +49,20 @@ func CreateKeyHandler(serverData *ServerData) http.HandlerFunc {
 
 		templates.KeyCard(*acct).Render(r.Context(), w)
 		return
+	}
+}
+
+// DashboardHandler renders the accounts dashboard (uses package-level DB if available)
+func SignerDashboard(serverData *ServerData) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		account, err := serverData.manager.GetAccountById(id)
+		if err == nil {
+			if err == sql.ErrNoRows {
+				return 
+			}
+		}
+
+		templates.SignerDashboard(*account).Render(r.Context(), w)
 	}
 }

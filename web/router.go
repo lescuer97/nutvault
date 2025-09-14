@@ -15,8 +15,8 @@ import (
 //go:embed static/*
 var static embed.FS
 
-func NewRouter(data *ServerData) http.Handler {
-	if data == nil {
+func NewRouter(serverData *ServerData) http.Handler {
+	if serverData == nil {
 		log.Panic("Server data structure is nil")
 	}
 
@@ -45,15 +45,20 @@ func NewRouter(data *ServerData) http.Handler {
 		log.Panicf("secp256k1.GeneratePrivateKey(). %+v", err)
 	}
 
-	router.Get("/login", LoginGetHandler(data))
-	router.Post("/login", LoginPostHandler(data, loginKey.Serialize()))
+	router.Get("/login", LoginGetHandler(serverData))
+	router.Post("/login", LoginPostHandler(serverData, loginKey.Serialize()))
 
 	// Group routes with specific middleware
 	router.Group(func(r chi.Router) {
 		r.Use(AuthMiddleware(loginKey.Serialize()))
-		r.Get("/", IndexHandler)
-		r.Get("/dashboard", DashboardHandler(data))
-		r.Post("/createkey", CreateKeyHandler(data))
+		// Serve the dashboard at the root path and remove the separate /dashboard endpoint
+		r.Get("/", DashboardHandler(serverData))
+		r.Post("/createkey", CreateKeyHandler(serverData))
+
+		// page for showing a dashboard
+		r.Get("/signer/{id}", SignerDashboard(serverData))
+
+		r.Get("/cert/{id}", DashboardHandler(serverData))
 	})
 
 	return router
