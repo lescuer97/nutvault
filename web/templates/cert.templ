@@ -3,3 +3,33 @@ package templates
 templ CertPre(id, content string) {
 	<pre id={ id } class="text-xs text-slate-500 font-mono whitespace-pre-wrap break-words">{ content }</pre>
 }
+
+templ CertButtonClosed(btnid, accountId, which string) {
+	<button id={ btnid } hx-get={ "/cert/" + accountId + "/" + which } hx-target={ "#" + which + "-row-" + accountId } hx-swap="outerHTML" class="px-2 py-1 bg-gray-200 rounded" aria-label={ "show " + which }>🙈</button>
+}
+
+templ CertButtonOpen(btnid, accountId, which string) {
+	<button id={ btnid } hx-get={ "/cert/" + accountId + "/" + which + "/hide" } hx-target={ "#" + which + "-row-" + accountId } hx-swap="outerHTML" class="px-2 py-1 bg-gray-200 rounded" aria-label={ "hide " + which }>👁️</button>
+}
+
+templ CertRow(accountId, which, label string, open bool, content string) {
+	<div id={ which + "-row-" + accountId } class="flex items-center justify-between">
+		<div>
+			<div class="text-sm font-medium">{ label }</div>
+			<div id={ which + "-display-" + accountId } class="text-xs text-slate-500 font-mono">
+				if open {
+					{ content }
+				} else {
+					****
+				}
+			</div>
+		</div>
+		<div>
+			if open {
+				@CertButtonOpen(which+"-btn-"+accountId, accountId, which)
+			} else {
+				@CertButtonClosed(which+"-btn-"+accountId, accountId, which)
+			}
+		</div>
+	</div>
+}
