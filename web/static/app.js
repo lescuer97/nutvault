@@ -1,3 +1,22 @@
+// Utility to find cert content in DOM by account and which
+function getCertContentFromDOM(accountId, which) {
+  // Prefer the pre we render with id="{which}-content-{accountId}"
+  const preId = `${which}-content-${accountId}`;
+  const pre = document.getElementById(preId);
+  if (pre && pre.textContent && pre.textContent.trim().length > 0) {
+    return pre.textContent;
+  }
+  // Fallback: look for the row and scan for a pre tag within it
+  const row = document.getElementById(`${which}-row-${accountId}`);
+  if (row) {
+    const preInRow = row.querySelector('pre');
+    if (preInRow && preInRow.textContent && preInRow.textContent.trim().length > 0) {
+      return preInRow.textContent;
+    }
+  }
+  return null;
+}
+
 /**
  * @typedef {Object}  UnsignedNostrEvent
  * @property {number} created_at  - should be a unix timestamp
@@ -88,3 +107,60 @@ if (loginContainer) {
           });
     })
 }
+
+// Copy cert content to clipboard when clicking copy buttons
+document.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.cert-copy-btn');
+    if (!btn) return;
+
+    // Find account/which from data attributes
+    const accountId = btn.getAttribute('data-account');
+    const which = btn.getAttribute('data-which');
+    if (!accountId || !which) return;
+
+    try {
+        // First try to copy from the DOM (preferred if already open)
+        let text = getCertContentFromDOM(accountId, which);
+
+        // If not found, also check for HTMX swapped content in the row
+        if (!text) {
+          const row = document.getElementById(`${which}-row-${accountId}`);
+          if (row) {
+            const preInRow = row.querySelector('pre');
+            if (preInRow && preInRow.textContent && preInRow.textContent.trim().length > 0) {
+              text = preInRow.textContent;
+            }
+          }
+        }
+
+        // If still not found, fetch the open fragment from server and parse
+        if (!text) {
+            const res = await fetch(`/cert/${accountId}/${which}`);
+            if (!res.ok) {
+                console.error('failed to fetch cert fragment', res.status);
+                return;
+            }
+            const html = await res.text();
+
+            // Create a temporary container to parse
+            const tmp = document.createElement('div');
+            tmp.innerHTML = html;
+            // Prefer specifically id'ed pre if present
+            const pre = tmp.querySelector(`#${which}-content-${accountId}`) || tmp.querySelector('pre');
+            text = pre ? pre.textContent : null;
+        }
+
+        if (!text) {
+            console.error('no cert content found to copy');
+            return;
+        }
+
+        await navigator.clipboard.writeText(text);
+        // give feedback by changing button text briefly
+        const original = btn.innerHTML;
+        btn.innerHTML = '✅';
+        setTimeout(() => btn.innerHTML = original, 1500);
+    } catch (err) {
+        console.error('copy failed', err);
+    }
+});

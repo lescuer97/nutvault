@@ -16,14 +16,18 @@ templ CertDownloadButton(btnid, accountId, which string) {
 	<a id={ btnid } href={ "/cert/" + accountId + "/" + which + "/download" } class="px-2 py-1 bg-green-100 rounded text-sm" aria-label={ "download " + which }>⬇️</a>
 }
 
+templ CertCopyButton(btnid, accountId, which string) {
+	<button id={ btnid } type="button" data-account={ accountId } data-which={ which } class="cert-copy-btn px-2 py-1 bg-blue-100 rounded text-sm" aria-label={ "copy " + which }>📋</button>
+}
+
 templ CertRow(accountId, which, label string, open bool, content string) {
-	// make the row relative so we can absolutely position the open-eye & download buttons
+	// make the row relative so we can absolutely position the action buttons
 	<div id={ which + "-row-" + accountId } class="relative flex items-start justify-between">
-		<div class="w-full pr-16">
+		<div class="w-full pr-20">
 			<div class="text-sm font-medium">{ label }</div>
 			<div id={ which + "-display-" + accountId } class="text-xs text-slate-500 font-mono mt-1">
 				if open {
-					{ content }
+					<pre id={ which + "-content-" + accountId } class="whitespace-pre-wrap break-words">{ content }</pre>
 				} else {
 					****
 				}
@@ -31,10 +35,11 @@ templ CertRow(accountId, which, label string, open bool, content string) {
 		</div>
 		<div>
 			if open {
-				// place open-eye and download buttons absolutely in the upper-right of the card
+				// place open-eye, download and copy buttons absolutely in the upper-right of the card
 				<div class="absolute top-2 right-2 flex items-center gap-2">
 					@CertButtonOpen(which+"-btn-"+accountId, accountId, which)
 					@CertDownloadButton(which+"-dl-"+accountId, accountId, which)
+					@CertCopyButton(which+"-cp-"+accountId, accountId, which)
 				</div>
 			} else {
 				// keep closed-eye button inline on the right
