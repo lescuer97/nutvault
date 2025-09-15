@@ -60,6 +60,8 @@ func NewRouter(serverData *ServerData) http.Handler {
 
 		// Certificate endpoints for HTMX requests: {which} is one of: ca, cert, key
 		r.Get("/cert/{id}/{which}", CertHandler(serverData))
+		// Download endpoint for certificates
+		r.Get("/cert/{id}/{which}/download", CertDownloadHandler(serverData))
 		// Hide endpoint to restore closed-eye button
 		r.Get("/cert/{id}/{which}/hide", HideCertHandler(serverData))
 	})

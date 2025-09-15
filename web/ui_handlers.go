@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
+	"unicode"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
@@ -64,6 +66,27 @@ func safeJoinFile(baseDir, fileName string) (string, error) {
 		return "", errors.New("path escapes base directory")
 	}
 	return absJoined, nil
+}
+
+// sanitizeFileName makes a safe short filename from an account name
+func sanitizeFileName(name string) string {
+	if name == "" {
+		return "account"
+	}
+	// replace spaces with underscores
+	name = strings.ReplaceAll(name, " ", "_")
+	// map to allowed chars: letters, digits, '-', '_', '.'
+	mapped := strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || unicode.IsDigit(r) || r == '-' || r == '_' || r == '.' {
+			return r
+		}
+		return '_'
+	}, name)
+	// trim length
+	if len(mapped) > 200 {
+		mapped = mapped[:200]
+	}
+	return mapped
 }
 
 // helper: render a closed row with blind text and closed-eye button
@@ -246,6 +269,99 @@ func CertHandler(serverData *ServerData) http.HandlerFunc {
 			http.Error(w, "invalid cert type", http.StatusBadRequest)
 			return
 		}
+	}
+}
+
+// CertDownloadHandler serves the certificate/key/ca as an attachment for download
+func CertDownloadHandler(serverData *ServerData) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		which := chi.URLParam(r, "which")
+
+		// sanitize inputs
+		if err := sanitizeId(id); err != nil {
+			http.Error(w, "invalid id", http.StatusBadRequest)
+			return
+		}
+		if _, err := sanitizeWhich(which); err != nil {
+			http.Error(w, "invalid type", http.StatusBadRequest)
+			return
+		}
+
+		if serverData == nil || serverData.manager == nil {
+			http.Error(w, "server not configured", http.StatusInternalServerError)
+			return
+		}
+
+		// Fetch account and ensure it exists
+		account, err := serverData.manager.GetAccountById(id)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				http.Error(w, "account not found", http.StatusNotFound)
+				return
+			}
+			http.Error(w, "failed to load account", http.StatusInternalServerError)
+			return
+		}
+
+		// Authorization
+		audPub, err := GetAudience(r)
+		if err != nil {
+			http.Error(w, "invalid audience", http.StatusUnauthorized)
+			return
+		}
+		if !bytes.Equal(audPub.SerializeCompressed(), account.Npub) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+
+		// Load content and serve as attachment
+		var data []byte
+		var fname string
+		switch which {
+		case "ca":
+			data = serverData.manager.GetCACertPEM()
+			if len(data) == 0 {
+				http.Error(w, "CA certificate not configured", http.StatusNotFound)
+				return
+			}
+			fname = sanitizeFileName(account.Name) + "-ca.pem"
+		case "cert":
+			d, err := serverData.manager.GetCertificate(id)
+			if err != nil {
+				http.Error(w, "certificate not found", http.StatusNotFound)
+				return
+			}
+			data = d
+			fname = sanitizeFileName(account.Name) + "-cert.pem"
+		case "key":
+			dir := serverData.manager.TlsConfigDir()
+			if dir == "" {
+				http.Error(w, "tls dir not configured", http.StatusInternalServerError)
+				return
+			}
+			keyFileName := id + "-key.pem"
+			keyPath, err := safeJoinFile(dir, keyFileName)
+			if err != nil {
+				http.Error(w, "invalid key path", http.StatusBadRequest)
+				return
+			}
+			d, err := os.ReadFile(keyPath)
+			if err != nil {
+				http.Error(w, "key not found", http.StatusNotFound)
+				return
+			}
+			data = d
+			fname = sanitizeFileName(account.Name) + "-key.pem"
+		default:
+			http.Error(w, "invalid cert type", http.StatusBadRequest)
+			return
+		}
+
+		// Serve file as attachment
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set("Content-Disposition", "attachment; filename=\""+fname+"\"")
+		http.ServeContent(w, r, fname, time.Now(), bytes.NewReader(data))
 	}
 }
 
