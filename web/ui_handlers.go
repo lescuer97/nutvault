@@ -3,14 +3,68 @@ package web
 import (
 	"bytes"
 	"database/sql"
+	"errors"
 	"log/slog"
 	"net/http"
 	"os"
-
-	"nutmix_remote_signer/web/templates"
+	"path/filepath"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-playground/validator/v10"
+
+	"nutmix_remote_signer/web/templates"
 )
+
+var (
+	validate = validator.New()
+	// allowed which values
+	allowedWhich = map[string]string{"ca": "CA Certificate", "cert": "TLS Certificate", "key": "TLS Key"}
+)
+
+func sanitizeId(id string) error {
+	if id == "" {
+		return errors.New("empty id")
+	}
+	// validate hex length 64
+	if err := validate.Var(id, "required,len=64,hexadecimal"); err != nil {
+		return err
+	}
+	return nil
+}
+
+func sanitizeWhich(which string) (string, error) {
+	// use validator oneof for allowed values
+	if err := validate.Var(which, "required,oneof=ca cert key"); err != nil {
+		return "", err
+	}
+	return allowedWhich[which], nil
+}
+
+// ensure the resolved file path stays within baseDir to prevent directory traversal
+func safeJoinFile(baseDir, fileName string) (string, error) {
+	if strings.Contains(fileName, "..") || strings.ContainsAny(fileName, "/\\") {
+		return "", errors.New("invalid filename")
+	}
+	joined := filepath.Join(baseDir, fileName)
+	absJoined, err := filepath.Abs(joined)
+	if err != nil {
+		return "", err
+	}
+	absBase, err := filepath.Abs(baseDir)
+	if err != nil {
+		return "", err
+	}
+	// ensure trailing separator on base for prefix check
+	baseWithSep := absBase
+	if !strings.HasSuffix(baseWithSep, string(os.PathSeparator)) {
+		baseWithSep = baseWithSep + string(os.PathSeparator)
+	}
+	if !strings.HasPrefix(absJoined, baseWithSep) {
+		return "", errors.New("path escapes base directory")
+	}
+	return absJoined, nil
+}
 
 // helper: render a closed row with blind text and closed-eye button
 func writeClosedRow(w http.ResponseWriter, r *http.Request, accountId, which, label string) error {
@@ -84,6 +138,11 @@ func CreateKeyHandler(serverData *ServerData) http.HandlerFunc {
 func SignerDashboard(serverData *ServerData) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
+		// sanitize id early
+		if err := sanitizeId(id); err != nil {
+			http.Error(w, "invalid id", http.StatusBadRequest)
+			return
+		}
 		account, err := serverData.manager.GetAccountById(id)
 		if err != nil {
 			if err == sql.ErrNoRows {
@@ -106,12 +165,24 @@ func CertHandler(serverData *ServerData) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		which := chi.URLParam(r, "which")
+
+		// sanitize inputs using go-playground/validator
+		if err := sanitizeId(id); err != nil {
+			http.Error(w, "invalid id", http.StatusBadRequest)
+			return
+		}
+		label, err := sanitizeWhich(which)
+		if err != nil {
+			http.Error(w, "invalid type", http.StatusBadRequest)
+			return
+		}
+
 		if serverData == nil || serverData.manager == nil {
 			http.Error(w, "server not configured", http.StatusInternalServerError)
 			return
 		}
 
-		// Fetch account and ensure it exists
+		// Fetch account and ensure it exists (GetAccountById uses parameterized queries)
 		account, err := serverData.manager.GetAccountById(id)
 		if err != nil {
 			if err == sql.ErrNoRows {
@@ -130,12 +201,6 @@ func CertHandler(serverData *ServerData) http.HandlerFunc {
 		}
 		if !bytes.Equal(audPub.SerializeCompressed(), account.Npub) {
 			http.Error(w, "forbidden", http.StatusForbidden)
-			return
-		}
-
-		label := map[string]string{"ca": "CA Certificate", "cert": "TLS Certificate", "key": "TLS Key"}[which]
-		if label == "" {
-			http.Error(w, "invalid cert type", http.StatusBadRequest)
 			return
 		}
 
@@ -163,8 +228,14 @@ func CertHandler(serverData *ServerData) http.HandlerFunc {
 				http.Error(w, "tls dir not configured", http.StatusInternalServerError)
 				return
 			}
-			p := dir + "/" + id + "-key.pem"
-			data, err := os.ReadFile(p)
+			// ensure safe path
+			keyFileName := id + "-key.pem"
+			keyPath, err := safeJoinFile(dir, keyFileName)
+			if err != nil {
+				http.Error(w, "invalid key path", http.StatusBadRequest)
+				return
+			}
+			data, err := os.ReadFile(keyPath)
 			if err != nil {
 				http.Error(w, "key not found", http.StatusNotFound)
 				return
@@ -183,6 +254,18 @@ func HideCertHandler(serverData *ServerData) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		which := chi.URLParam(r, "which")
+
+		// sanitize inputs
+		if err := sanitizeId(id); err != nil {
+			http.Error(w, "invalid id", http.StatusBadRequest)
+			return
+		}
+		label, err := sanitizeWhich(which)
+		if err != nil {
+			http.Error(w, "invalid type", http.StatusBadRequest)
+			return
+		}
+
 		if serverData == nil || serverData.manager == nil {
 			http.Error(w, "server not configured", http.StatusInternalServerError)
 			return
@@ -206,12 +289,6 @@ func HideCertHandler(serverData *ServerData) http.HandlerFunc {
 		}
 		if !bytes.Equal(audPub.SerializeCompressed(), account.Npub) {
 			http.Error(w, "forbidden", http.StatusForbidden)
-			return
-		}
-
-		label := map[string]string{"ca": "CA Certificate", "cert": "TLS Certificate", "key": "TLS Key"}[which]
-		if label == "" {
-			http.Error(w, "invalid cert type", http.StatusBadRequest)
 			return
 		}
 
