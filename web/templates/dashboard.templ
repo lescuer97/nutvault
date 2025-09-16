@@ -22,7 +22,9 @@ templ SignerDashboard(account database.Account) {
 	@Layout("Signer Dashboard") {
 		<div class="container mx-auto py-8 px-6">
 			<div class="flex items-center justify-between mb-6">
-				<h1 class="text-2xl font-bold">{ account.Name }</h1>
+				<div>
+					<h1 class="text-2xl font-semibold tracking-tight">Signer Dashboard</h1>
+				</div>
 			</div>
 			<div class="grid gap-4 grid-cols-1 md:grid-cols-2">
 				<div>

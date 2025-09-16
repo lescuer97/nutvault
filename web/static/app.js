@@ -1,3 +1,5 @@
+// Utility functions and HTMX-compatible handlers for the UI
+
 // Utility to find cert content in DOM by account and which
 function getCertContentFromDOM(accountId, which) {
   // Prefer the pre we render with id="{which}-content-{accountId}"
@@ -37,11 +39,11 @@ function getCertContentFromDOM(accountId, which) {
 
 
 /** 
-*
-* @argument {UnsignedNostrEvent} event
-*
-* @returns {Promise<SignedNostrEvent>} 
-*/
+ *
+ * @argument {UnsignedNostrEvent} event
+ *
+ * @returns {Promise<SignedNostrEvent>} 
+ */
 async function sign_nostr_event(event) {
     if (!window.nostr) {
         throw Error("window nostr is not set. You need to a nip-07 extension")
@@ -57,8 +59,8 @@ async function sign_nostr_event(event) {
 
 
 /** 
-    *@type {HTMLDivElement}
-    */
+     *@type {HTMLDivElement}
+     */
 const loginContainer = document.getElementById("loginContainer")
 console.log({ loginContainer })
 if (loginContainer) {
@@ -164,3 +166,44 @@ document.addEventListener('click', async (e) => {
         console.error('copy failed', err);
     }
 });
+
+// Setup name editing behavior for cards (toggle save button visibility)
+function setupCardNameEditing() {
+  document.querySelectorAll('.card-name-input').forEach((input) => {
+    const form = input.closest('form');
+    if (!form) return;
+    const saveBtn = form.querySelector('.card-save-btn');
+    if (!saveBtn) return;
+
+    const getDefault = () => (input.getAttribute('data-default') || '').trim();
+
+    const syncButton = () => {
+      const changed = input.value.trim() !== getDefault();
+      saveBtn.classList.toggle('hidden', !changed);
+    };
+
+    // Update visibility on input
+    input.addEventListener('input', syncButton);
+
+    // On form submit, hide save button and mark busy to avoid double submissions
+    form.addEventListener('submit', () => {
+      saveBtn.classList.add('hidden');
+      saveBtn.setAttribute('aria-busy', 'true');
+    });
+
+    // Initialize
+    syncButton();
+  });
+}
+
+// Initialize on DOM ready
+document.addEventListener('DOMContentLoaded', () => {
+  setupCardNameEditing();
+});
+
+// Re-initialize after HTMX swaps new content so new inputs get behavior attached
+if (typeof document !== 'undefined') {
+  document.body.addEventListener('htmx:afterSwap', (evt) => {
+    setupCardNameEditing();
+  });
+}

@@ -3,7 +3,6 @@ package web
 import (
 	"bytes"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -181,6 +180,7 @@ func SignerDashboard(serverData *ServerData) http.HandlerFunc {
 }
 
 // API endpoint to update account name
+// Simplified: only accept form submissions and require the "name" field
 func UpdateAccountNameHandler(serverData *ServerData) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
@@ -213,26 +213,47 @@ func UpdateAccountNameHandler(serverData *ServerData) http.HandlerFunc {
 			return
 		}
 
-		var payload struct {
-			Name string `json:"name"`
+		// Ensure request is a form submission
+		ct := r.Header.Get("Content-Type")
+		if !strings.HasPrefix(ct, "application/x-www-form-urlencoded") && !strings.HasPrefix(ct, "multipart/form-data") {
+			http.Error(w, "expected form submission", http.StatusBadRequest)
+			return
 		}
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+
+		if err := r.ParseForm(); err != nil {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
 
-		if payload.Name == "" {
+		newName := strings.TrimSpace(r.FormValue("name"))
+		if newName == "" {
 			http.Error(w, "empty name", http.StatusBadRequest)
 			return
 		}
 
-		if err := serverData.manager.UpdateAccountName(r.Context(), id, payload.Name); err != nil {
+		if err := serverData.manager.UpdateAccountName(r.Context(), id, newName); err != nil {
 			slog.Error("UpdateAccountName failed", slog.Any("error", err))
 			http.Error(w, "failed to update", http.StatusInternalServerError)
 			return
 		}
 
-		w.WriteHeader(http.StatusNoContent)
+		// Fetch updated account and render the whole card fragment so HTMX can swap the card
+		updatedAccount, err := serverData.manager.GetAccountById(id)
+		if err != nil {
+			slog.Error("GetAccountById after update failed", slog.Any("error", err))
+			http.Error(w, "failed to load account", http.StatusInternalServerError)
+			return
+		}
+
+		var buf bytes.Buffer
+		if err := templates.KeyCardNoButton(*updatedAccount).Render(r.Context(), &buf); err != nil {
+			slog.Error("render card fragment failed", slog.Any("error", err))
+			http.Error(w, "render failed", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(buf.Bytes())
 	}
 }
 
