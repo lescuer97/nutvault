@@ -57,6 +57,8 @@ func NewRouter(serverData *ServerData) http.Handler {
 
 		// page for showing a dashboard for a signer
 		r.Get("/signer/{id}", SignerDashboard(serverData))
+		// API endpoint to update account name
+		r.Put("/signer/{id}/name", UpdateAccountNameHandler(serverData))
 
 		// Certificate endpoints for HTMX requests: {which} is one of: ca, cert, key
 		r.Get("/cert/{id}/{which}", CertHandler(serverData))

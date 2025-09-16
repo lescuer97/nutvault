@@ -3,6 +3,7 @@ package web
 import (
 	"bytes"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -137,7 +138,6 @@ func DashboardHandler(serverData *ServerData) http.HandlerFunc {
 }
 
 // CreateKeyHandler is a lightweight mock create endpoint for HTMX.
-// It returns a single card fragment that HTMX can insert. The created key is NOT persisted.
 func CreateKeyHandler(serverData *ServerData) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		pubkey, err := GetAudience(r)
@@ -161,7 +161,6 @@ func CreateKeyHandler(serverData *ServerData) http.HandlerFunc {
 func SignerDashboard(serverData *ServerData) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
-		// sanitize id early
 		if err := sanitizeId(id); err != nil {
 			http.Error(w, "invalid id", http.StatusBadRequest)
 			return
@@ -181,15 +180,68 @@ func SignerDashboard(serverData *ServerData) http.HandlerFunc {
 	}
 }
 
+// API endpoint to update account name
+func UpdateAccountNameHandler(serverData *ServerData) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		if err := sanitizeId(id); err != nil {
+			http.Error(w, "invalid id", http.StatusBadRequest)
+			return
+		}
+		if serverData == nil || serverData.manager == nil {
+			http.Error(w, "server not configured", http.StatusInternalServerError)
+			return
+		}
+
+		// Authorization: ensure requester matches account
+		account, err := serverData.manager.GetAccountById(id)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				http.Error(w, "account not found", http.StatusNotFound)
+				return
+			}
+			http.Error(w, "failed to load account", http.StatusInternalServerError)
+			return
+		}
+		audPub, err := GetAudience(r)
+		if err != nil {
+			http.Error(w, "invalid audience", http.StatusUnauthorized)
+			return
+		}
+		if !bytes.Equal(audPub.SerializeCompressed(), account.Npub) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+
+		var payload struct {
+			Name string `json:"name"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+
+		if payload.Name == "" {
+			http.Error(w, "empty name", http.StatusBadRequest)
+			return
+		}
+
+		if err := serverData.manager.UpdateAccountName(r.Context(), id, payload.Name); err != nil {
+			slog.Error("UpdateAccountName failed", slog.Any("error", err))
+			http.Error(w, "failed to update", http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
 // CertHandler serves certificate content for HTMX requests. {which} is ca, cert, or key
-// Access control: verifies that the authenticated audience (token) matches the account's npub
-// Simplified swapping: returns a full row fragment (open or closed) swapped with outerHTML on the row container
 func CertHandler(serverData *ServerData) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		which := chi.URLParam(r, "which")
 
-		// sanitize inputs using go-playground/validator
 		if err := sanitizeId(id); err != nil {
 			http.Error(w, "invalid id", http.StatusBadRequest)
 			return
@@ -205,7 +257,6 @@ func CertHandler(serverData *ServerData) http.HandlerFunc {
 			return
 		}
 
-		// Fetch account and ensure it exists (GetAccountById uses parameterized queries)
 		account, err := serverData.manager.GetAccountById(id)
 		if err != nil {
 			if err == sql.ErrNoRows {
@@ -216,7 +267,6 @@ func CertHandler(serverData *ServerData) http.HandlerFunc {
 			return
 		}
 
-		// Authorization
 		audPub, err := GetAudience(r)
 		if err != nil {
 			http.Error(w, "invalid audience", http.StatusUnauthorized)
@@ -227,7 +277,6 @@ func CertHandler(serverData *ServerData) http.HandlerFunc {
 			return
 		}
 
-		// Load content and render open row
 		switch which {
 		case "ca":
 			ca := serverData.manager.GetCACertPEM()
@@ -251,7 +300,6 @@ func CertHandler(serverData *ServerData) http.HandlerFunc {
 				http.Error(w, "tls dir not configured", http.StatusInternalServerError)
 				return
 			}
-			// ensure safe path
 			keyFileName := id + "-key.pem"
 			keyPath, err := safeJoinFile(dir, keyFileName)
 			if err != nil {
@@ -278,7 +326,6 @@ func CertDownloadHandler(serverData *ServerData) http.HandlerFunc {
 		id := chi.URLParam(r, "id")
 		which := chi.URLParam(r, "which")
 
-		// sanitize inputs
 		if err := sanitizeId(id); err != nil {
 			http.Error(w, "invalid id", http.StatusBadRequest)
 			return
@@ -293,7 +340,6 @@ func CertDownloadHandler(serverData *ServerData) http.HandlerFunc {
 			return
 		}
 
-		// Fetch account and ensure it exists
 		account, err := serverData.manager.GetAccountById(id)
 		if err != nil {
 			if err == sql.ErrNoRows {
@@ -304,7 +350,6 @@ func CertDownloadHandler(serverData *ServerData) http.HandlerFunc {
 			return
 		}
 
-		// Authorization
 		audPub, err := GetAudience(r)
 		if err != nil {
 			http.Error(w, "invalid audience", http.StatusUnauthorized)
@@ -315,7 +360,6 @@ func CertDownloadHandler(serverData *ServerData) http.HandlerFunc {
 			return
 		}
 
-		// Load content and serve as attachment
 		var data []byte
 		var fname string
 		switch which {
@@ -358,7 +402,6 @@ func CertDownloadHandler(serverData *ServerData) http.HandlerFunc {
 			return
 		}
 
-		// Serve file as attachment
 		w.Header().Set("Content-Type", "application/octet-stream")
 		w.Header().Set("Content-Disposition", "attachment; filename=\""+fname+"\"")
 		http.ServeContent(w, r, fname, time.Now(), bytes.NewReader(data))
@@ -371,7 +414,6 @@ func HideCertHandler(serverData *ServerData) http.HandlerFunc {
 		id := chi.URLParam(r, "id")
 		which := chi.URLParam(r, "which")
 
-		// sanitize inputs
 		if err := sanitizeId(id); err != nil {
 			http.Error(w, "invalid id", http.StatusBadRequest)
 			return
@@ -387,7 +429,6 @@ func HideCertHandler(serverData *ServerData) http.HandlerFunc {
 			return
 		}
 
-		// Authorization: ensure token audience matches account.npub
 		account, err := serverData.manager.GetAccountById(id)
 		if err != nil {
 			if err == sql.ErrNoRows {
