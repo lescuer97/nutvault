@@ -23,7 +23,7 @@ templ CertCopyButton(btnid, accountId, which string) {
 templ CertRow(accountId, which, label string, open bool, content string) {
 	// make the row relative so we can absolutely position the action buttons
 	<div id={ which + "-row-" + accountId } class="relative flex items-start justify-between">
-		<div class="w-full pr-20">
+		<div class="w-full pr-24">
 			<div class="text-sm font-medium">{ label }</div>
 			<div id={ which + "-display-" + accountId } class="text-xs text-slate-500 font-mono mt-1">
 				if open {
@@ -42,8 +42,11 @@ templ CertRow(accountId, which, label string, open bool, content string) {
 					@CertCopyButton(which+"-cp-"+accountId, accountId, which)
 				</div>
 			} else {
-				// keep closed-eye button inline on the right
-				@CertButtonClosed(which+"-btn-"+accountId, accountId, which)
+				// show closed-eye button inline and always show download button next to it
+				<div class="flex items-center gap-2">
+					@CertButtonClosed(which+"-btn-"+accountId, accountId, which)
+					@CertDownloadButton(which+"-dl-"+accountId, accountId, which)
+				</div>
 			}
 		</div>
 	</div>
