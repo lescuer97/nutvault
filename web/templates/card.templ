@@ -39,7 +39,7 @@ templ KeyCardNoButton(acct database.Account) {
 				<form hx-put={ "/signer/" + acct.Id + "/name" } hx-target={ "#card-" + acct.Id } hx-swap="outerHTML" class="flex items-center gap-3">
 					<div class="flex items-center gap-3">
 						<span class="text-sm font-medium text-slate-700 tracking-tight">Name:</span>
-						<input name="name" type="text" value={ acct.Name } data-default={ acct.Name } class="card-name-input h-6 bg-transparent border-b border-slate-600 text-sm text-slate-900 placeholder-slate-500 px-2 py-0 focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_12px_rgba(6,182,212,0.10)] transition w-56 tracking-tight font-medium" />
+						<input name="name" type="text" value={ acct.Name } class="card-name-input h-6 bg-transparent border-b border-slate-600 text-sm text-slate-900 placeholder-slate-500 px-2 py-0 focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_12px_rgba(6,182,212,0.10)] transition w-56 tracking-tight font-medium" />
 					</div>
 					<button type="submit" class="card-save-btn hidden inline-flex items-center gap-2 px-3 h-7 text-xs rounded-full bg-gradient-to-r from-cyan-500 to-violet-500 text-white shadow-sm hover:from-cyan-400 hover:to-violet-400 focus:outline-none uppercase tracking-widest">Save</button>
 				</form>
