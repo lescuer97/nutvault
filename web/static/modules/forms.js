@@ -8,18 +8,25 @@ export function initCardInputs(root = document) {
     const saveBtn = form.querySelector('.card-save-btn');
     if (!saveBtn) return;
 
+    // Ensure defaultValue is set to the initial value for comparison
+    if (!input.defaultValue) {
+      input.defaultValue = input.value;
+    }
+
     const update = () => {
-      if (input.value !== input.defaultValue) {
-        saveBtn.classList.remove('hidden');
+      const changed = input.value !== input.defaultValue;
+      if (changed) {
+        saveBtn.classList.remove('invisible');
       } else {
-        saveBtn.classList.add('hidden');
+        saveBtn.classList.add('invisible');
       }
     };
 
+    // Update visibility on input and change events
     input.addEventListener('input', update);
     input.addEventListener('change', update);
 
-    // initialize
+    // Initialize (make sure it's hidden if no changes)
     update();
 
     form.addEventListener('submit', () => {
