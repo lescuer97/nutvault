@@ -208,3 +208,23 @@ func (m *Manager) TlsConfigDir() string {
 	}
 	return m.tlsConfigDir
 }
+
+// GetKeysetsForAccount retrieves all keysets (seeds) for a given account ID with proper transaction handling
+func (m *Manager) GetKeysetsForAccount(ctx context.Context, accountId string) ([]database.Seed, error) {
+	if m == nil || m.db == nil || m.db.Db == nil {
+		return nil, fmt.Errorf("manager database is not initialized")
+	}
+	tx, err := m.db.Db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+	seeds, err := m.db.GetSeedsByAccountId(tx, accountId)
+	if err != nil {
+		return nil, fmt.Errorf("GetSeedsByAccountId: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit: %w", err)
+	}
+	return seeds, nil
+}

@@ -473,3 +473,56 @@ func HideCertHandler(serverData *ServerData) http.HandlerFunc {
 		_ = writeClosedRow(w, r, id, which, label)
 	}
 }
+
+// KeysetsListHandler returns the keysets fragment with ownership verification
+func KeysetsListHandler(serverData *ServerData) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		if err := sanitizeId(id); err != nil {
+			http.Error(w, "invalid id", http.StatusBadRequest)
+			return
+		}
+		if serverData == nil || serverData.manager == nil {
+			http.Error(w, "server not configured", http.StatusInternalServerError)
+			return
+		}
+
+		// Ownership verification (same pattern as other handlers)
+		account, err := serverData.manager.GetAccountById(id)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				http.NotFound(w, r)
+				return
+			}
+			http.Error(w, "failed to load account", http.StatusInternalServerError)
+			return
+		}
+		audPub, err := GetAudience(r)
+		if err != nil {
+			http.Error(w, "invalid audience", http.StatusUnauthorized)
+			return
+		}
+		if !bytes.Equal(audPub.SerializeCompressed(), account.Npub) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+
+		// Fetch seeds (keysets)
+		seeds, err := serverData.manager.GetKeysetsForAccount(r.Context(), id)
+		if err != nil {
+			slog.Error("GetKeysetsForAccount", slog.Any("error", err))
+			http.Error(w, "failed to load keysets", http.StatusInternalServerError)
+			return
+		}
+
+		var buf bytes.Buffer
+		if err := templates.KeysetsList(seeds).Render(r.Context(), &buf); err != nil {
+			slog.Error("render keysets list failed", slog.Any("error", err))
+			http.Error(w, "render failed", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(buf.Bytes())
+	}
+}

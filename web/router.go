@@ -60,6 +60,8 @@ func NewRouter(serverData *ServerData) http.Handler {
 		// API endpoint to update account name
 		r.Put("/signer/{id}/name", UpdateAccountNameHandler(serverData))
 
+		r.Get("/signer/{id}/keysets", KeysetsListHandler(serverData))
+
 		// Certificate endpoints for HTMX requests: {which} is one of: ca, cert, key
 		r.Get("/cert/{id}/{which}", CertHandler(serverData))
 		// Download endpoint for certificates

@@ -1,0 +1,41 @@
+package templates
+
+import "time"
+import "nutmix_remote_signer/database"
+
+// Single keyset card row
+templ KeysetItem(seed database.Seed) {
+	<div class="rounded-lg border bg-white p-3">
+		<div class="flex items-center justify-between">
+			<div class="text-sm font-semibold text-slate-700">
+				ID:
+				<code class="font-mono text-xs break-all">{ seed.Id }</code>
+			</div>
+			<div class="text-right text-xs text-slate-400 whitespace-nowrap">
+				{ time.Unix(seed.CreatedAt, 0).Format("02 Jan 2006") }
+			</div>
+		</div>
+		<div class="mt-2 text-xs text-slate-600">
+			<div><span class="text-slate-500">Version:</span> { seed.Version }</div>
+			<div><span class="text-slate-500">Active:</span> { seed.Active }</div>
+			<div><span class="text-slate-500">Fee (ppk):</span> { seed.InputFeePpk }</div>
+			<div><span class="text-slate-500">Unit:</span> { seed.Unit }</div>
+		</div>
+	</div>
+}
+
+// Full "Keysets" card (HTMX fragment response)
+templ KeysetsList(seeds []database.Seed) {
+	<div class="rounded-xl border bg-white p-4 shadow-sm">
+		<h2 class="text-lg font-semibold mb-2">Keysets</h2>
+		if len(seeds) == 0 {
+			<div class="text-sm text-slate-500">No keysets yet.</div>
+		} else {
+			<div class="space-y-3">
+				for _, s := range seeds {
+					@KeysetItem(s)
+				}
+			</div>
+		}
+	</div>
+}

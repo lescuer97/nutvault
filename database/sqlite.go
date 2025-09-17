@@ -128,7 +128,7 @@ func (sq *SqliteDB) GetSeedsByUnit(tx *sql.Tx, unit cashu.Unit) ([]Seed, error) 
 }
 func (sq *SqliteDB) GetSeedsByAccountId(tx *sql.Tx, accountId string) ([]Seed, error) {
 	seeds := []Seed{}
-	stmt, err := tx.Prepare("SELECT  created_at, active, version, unit, id, input_fee_ppk, legacy, amounts, account_id, expiry_limit FROM seeds WHERE account_id = $1")
+	stmt, err := tx.Prepare("SELECT  created_at, active, version, unit, id, input_fee_ppk, legacy, amounts, account_id, final_expiry FROM seeds WHERE account_id = $1")
 	if err != nil {
 		return seeds, fmt.Errorf(`tx.Prepare("SELECT  created_at, active, version, unit, id, input_fee_ppk, legacy, max_order FROM seeds WHERE unit = $1"). %w`, err)
 	}

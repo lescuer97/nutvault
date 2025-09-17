@@ -30,12 +30,24 @@ templ SignerDashboard(account database.Account) {
 				<div>
 					@KeyCardNoButton(account)
 				</div>
-				<div class="rounded-xl border bg-white p-4 shadow-sm">
-					<h2 class="text-lg font-semibold mb-2">Certificates</h2>
-					<div class="space-y-3">
-						@CertRow(account.Id, "ca", "CA Certificate", false, "")
-						@CertRow(account.Id, "cert", "TLS Certificate", false, "")
-						@CertRow(account.Id, "key", "TLS Key", false, "")
+				<div class="space-y-4">
+					<div class="rounded-xl border bg-white p-4 shadow-sm">
+						<h2 class="text-lg font-semibold mb-2">Certificates</h2>
+						<div class="space-y-3">
+							@CertRow(account.Id, "ca", "CA Certificate", false, "")
+							@CertRow(account.Id, "cert", "TLS Certificate", false, "")
+							@CertRow(account.Id, "key", "TLS Key", false, "")
+						</div>
+					</div>
+					<div
+						id={ "keysets-root-" + account.Id }
+						hx-get={ "/signer/" + account.Id + "/keysets" }
+						hx-trigger="load"
+						hx-target={ "#" + "keysets-root-" + account.Id }
+						hx-swap="outerHTML"
+						class="rounded-xl border bg-white p-4 shadow-sm text-sm text-slate-500"
+					>
+						Loading keysets...
 					</div>
 				</div>
 			</div>
