@@ -5,7 +5,7 @@ import "nutmix_remote_signer/database"
 
 // Single keyset card row
 templ KeysetItem(seed database.Seed) {
-	<div class="rounded-lg border bg-white p-3 max-w-md">
+	<div class="rounded-lg border bg-white p-3 max-w-md w-100">
 		<div class="flex items-center justify-between">
 			<div class="text-sm font-semibold text-slate-700">
 				ID:
@@ -26,7 +26,7 @@ templ KeysetItem(seed database.Seed) {
 
 // Full "Keysets" card (HTMX fragment response)
 templ KeysetsList(seeds []database.Seed) {
-	<div class="rounded-xl bg-white p-4 shadow-sm">
+	<div class="rounded-xl bg-white  w-full">
 		<h2 class="text-lg font-semibold mb-2">Keysets</h2>
 		if len(seeds) == 0 {
 			<div class="text-sm text-slate-500">No keysets yet.</div>

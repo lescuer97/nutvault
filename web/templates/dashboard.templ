@@ -22,15 +22,13 @@ templ SignerDashboard(account database.Account) {
 	@Layout("Signer Dashboard") {
 		<div class="container mx-auto py-8 px-6">
 			<div class="flex items-center justify-between mb-6">
-				<div>
-					<h1 class="text-2xl font-semibold tracking-tight">Signer Dashboard</h1>
-				</div>
+				<h1 class="text-2xl font-semibold tracking-tight">Signer Dashboard</h1>
 			</div>
-			<div class="grid gap-4 grid-cols-1 md:grid-cols-2">
-				<div>
+			<div class="flex flex-col md:flex-row gap-6">
+				<div class="md:w-1/3">
 					@KeyCardNoButton(account)
 				</div>
-				<div class="space-y-4">
+				<div class="md:w-2/3 flex flex-col gap-6">
 					<div class="rounded-xl border bg-white p-4 shadow-sm">
 						<h2 class="text-lg font-semibold mb-2">Certificates</h2>
 						<div class="space-y-3">
@@ -39,16 +37,19 @@ templ SignerDashboard(account database.Account) {
 							@CertRow(account.Id, "key", "TLS Key", false, "")
 						</div>
 					</div>
-					<div
-						id={ "keysets-root-" + account.Id }
-						hx-get={ "/signer/" + account.Id + "/keysets" }
-						hx-trigger="load"
-						hx-target={ "#" + "keysets-root-" + account.Id }
-						hx-swap="outerHTML"
-						class="rounded-xl border bg-white p-4 shadow-sm text-sm text-slate-500"
-					>
-						Loading keysets...
-					</div>
+				</div>
+			</div>
+			<!-- Keysets card with full width indentation -->
+			<div class="rounded-xl mt-4 border bg-white p-4 shadow-sm text-sm text-slate-500">
+				<div
+					id={ "keysets-root-" + account.Id }
+					hx-get={ "/signer/" + account.Id + "/keysets" }
+					hx-trigger="load"
+					hx-target={ "#" + "keysets-root-" + account.Id }
+					hx-swap="outerHTML"
+					class="py-2"
+				>
+					Loading keysets...
 				</div>
 			</div>
 		</div>
