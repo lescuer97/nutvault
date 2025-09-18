@@ -57,7 +57,8 @@ func AuthMiddleware(secret []byte) func(http.Handler) http.Handler {
 				})
 
 				if isLoginPath && token != nil && !token.Valid {
-					next.ServeHTTP(w, r)
+					w.Header().Set("HX-Location", "/login")
+					http.Redirect(w, r, "/login", http.StatusTemporaryRedirect)
 					return
 				}
 
