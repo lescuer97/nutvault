@@ -240,7 +240,6 @@ func (m *Manager) SetAccountActive(ctx context.Context, accountID string, active
 		return fmt.Errorf("UpdateSeedsActiveStatus: %w", err)
 	}
 
-
 	return nil
 }
 

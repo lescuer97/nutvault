@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"nutmix_remote_signer/database"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,7 +17,7 @@ import (
 
 var ErrNpubDoesNotOwnSignerId = errors.New("Npub does not own signer")
 
-func VerifyIdInRequestIsAvailable(serverData *ServerData, request *http.Request) (string, error) {
+func VerifyIdInRequestIsAvailable(serverData *ServerData, request *http.Request) (*database.Account, error) {
 	id := chi.URLParam(request, "id")
 	if serverData == nil {
 		log.Panicf("Server data should not be nil ever at this point")
@@ -26,24 +27,24 @@ func VerifyIdInRequestIsAvailable(serverData *ServerData, request *http.Request)
 	}
 
 	if err := sanitizeId(id); err != nil {
-		return "", fmt.Errorf("sanitizeId(id). %w", err)
+		return nil, fmt.Errorf("sanitizeId(id). %w", err)
 	}
 
 	// Ownership verification (same pattern as other handlers)
 	account, err := serverData.manager.GetAccountById(id)
 	if err != nil {
-		return "", fmt.Errorf("serverData.manager.GetAccountById(id). %w", err)
+		return nil, fmt.Errorf("serverData.manager.GetAccountById(id). %w", err)
 	}
 
 	audPub, err := GetAudience(request)
 	if err != nil {
-		return "", fmt.Errorf("GetAudience(request). %w", err)
+		return nil, fmt.Errorf("GetAudience(request). %w", err)
 	}
 	if !bytes.Equal(audPub.SerializeCompressed(), account.Npub) {
-		return "", ErrNpubDoesNotOwnSignerId
+		return nil, ErrNpubDoesNotOwnSignerId
 	}
 
-	return id, nil
+	return account, nil
 }
 func sanitizeId(id string) error {
 	if id == "" {

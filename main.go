@@ -6,7 +6,6 @@ import (
 	"log"
 	"log/slog"
 	"net"
-	"net/http"
 	"nutmix_remote_signer/database"
 	sig "nutmix_remote_signer/gen/signer"
 	"nutmix_remote_signer/routes"
@@ -152,10 +151,7 @@ func main() {
 		mgr := accountmanager.NewManager(&sqlite, caCertPEM, caKeyPEM, "")
 
 		slog.Info("Starting web server...", slog.String("port", abstractSocket))
-		// Construct ServerData with the manager so UI handlers can use it
-		sd := web.NewServerData(&mgr)
-		router := web.NewRouter(sd)
-		if err := http.ListenAndServe(":4200", router); err != nil {
+		if err := web.RunHTTPServer(":4200", &mgr); err != nil {
 			log.Fatalf("http server: %v", err)
 		}
 	}()

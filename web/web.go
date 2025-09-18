@@ -70,6 +70,9 @@ func NewServerData(mgr *accountmanager.Manager) *ServerData {
 
 func RunHTTPServer(addr string, manager *accountmanager.Manager) error {
 	data := NewServerData(manager)
+	if data.manager == nil {
+		panic("manager should never be null at the after NewServerData")
+	}
 	router := NewRouter(data)
 	return http.ListenAndServe(addr, router)
 }

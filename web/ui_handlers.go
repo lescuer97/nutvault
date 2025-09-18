@@ -115,36 +115,15 @@ func SignerDashboard(serverData *ServerData) http.HandlerFunc {
 // Simplified: only accept form submissions and require the "name" field
 func UpdateAccountNameHandler(serverData *ServerData) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id := chi.URLParam(r, "id")
-		if err := sanitizeId(id); err != nil {
-			http.Error(w, "invalid id", http.StatusBadRequest)
-			return
-		}
-		if serverData == nil || serverData.manager == nil {
-			http.Error(w, "server not configured", http.StatusInternalServerError)
-			return
-		}
-
-		// Authorization: ensure requester matches account
-		account, err := serverData.manager.GetAccountById(id)
+		account, err := VerifyIdInRequestIsAvailable(serverData, r)
 		if err != nil {
-			if err == sql.ErrNoRows {
-				http.Error(w, "account not found", http.StatusNotFound)
-				return
-			}
-			http.Error(w, "failed to load account", http.StatusInternalServerError)
+			slog.Error("VerifyIdInRequestIsAvailable(serverData, r)", slog.Any("error", err))
+			http.Error(w, "you don't have access to the signer", http.StatusInternalServerError)
 			return
 		}
-		audPub, err := GetAudience(r)
-		if err != nil {
-			http.Error(w, "invalid audience", http.StatusUnauthorized)
-			return
+		if account == nil {
+			panic("account should never be nil at this point")
 		}
-		if !bytes.Equal(audPub.SerializeCompressed(), account.Npub) {
-			http.Error(w, "forbidden", http.StatusForbidden)
-			return
-		}
-
 		// Ensure request is a form submission
 		ct := r.Header.Get("Content-Type")
 		if !strings.HasPrefix(ct, "application/x-www-form-urlencoded") && !strings.HasPrefix(ct, "multipart/form-data") {
@@ -163,22 +142,16 @@ func UpdateAccountNameHandler(serverData *ServerData) http.HandlerFunc {
 			return
 		}
 
-		if err := serverData.manager.UpdateAccountName(r.Context(), id, newName); err != nil {
+		account.Name = newName
+
+		if err := serverData.manager.UpdateAccountName(r.Context(), account.Id, account.Name); err != nil {
 			slog.Error("UpdateAccountName failed", slog.Any("error", err))
 			http.Error(w, "failed to update", http.StatusInternalServerError)
 			return
 		}
 
-		// Fetch updated account and render the whole card fragment so HTMX can swap the card
-		updatedAccount, err := serverData.manager.GetAccountById(id)
-		if err != nil {
-			slog.Error("GetAccountById after update failed", slog.Any("error", err))
-			http.Error(w, "failed to load account", http.StatusInternalServerError)
-			return
-		}
-
 		var buf bytes.Buffer
-		if err := templates.KeyCardNoButton(*updatedAccount).Render(r.Context(), &buf); err != nil {
+		if err := templates.KeyCardNoButton(*account).Render(r.Context(), &buf); err != nil {
 			slog.Error("render card fragment failed", slog.Any("error", err))
 			http.Error(w, "render failed", http.StatusInternalServerError)
 			return
@@ -192,31 +165,22 @@ func UpdateAccountNameHandler(serverData *ServerData) http.HandlerFunc {
 // CertHandler serves certificate content for HTMX requests. {which} is ca, cert, or key
 func CertHandler(serverData *ServerData) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id := chi.URLParam(r, "id")
-		which := chi.URLParam(r, "which")
-
-		if err := sanitizeId(id); err != nil {
-			http.Error(w, "invalid id", http.StatusBadRequest)
+		account, err := VerifyIdInRequestIsAvailable(serverData, r)
+		if err != nil {
+			slog.Error("VerifyIdInRequestIsAvailable(serverData, r)", slog.Any("error", err))
+			http.Error(w, "you don't have access to the signer", http.StatusInternalServerError)
 			return
 		}
+
+		if account == nil {
+			panic("account should never be nil at this point")
+		}
+
+		which := chi.URLParam(r, "which")
+
 		label, err := sanitizeWhich(which)
 		if err != nil {
 			http.Error(w, "invalid type", http.StatusBadRequest)
-			return
-		}
-
-		if serverData == nil || serverData.manager == nil {
-			http.Error(w, "server not configured", http.StatusInternalServerError)
-			return
-		}
-
-		account, err := serverData.manager.GetAccountById(id)
-		if err != nil {
-			if err == sql.ErrNoRows {
-				http.Error(w, "account not found", http.StatusNotFound)
-				return
-			}
-			http.Error(w, "failed to load account", http.StatusInternalServerError)
 			return
 		}
 
@@ -237,15 +201,15 @@ func CertHandler(serverData *ServerData) http.HandlerFunc {
 				http.Error(w, "CA certificate not configured", http.StatusNotFound)
 				return
 			}
-			_ = writeOpenRow(w, r, id, which, label, string(ca))
+			_ = writeOpenRow(w, r, account.Id, which, label, string(ca))
 			return
 		case "cert":
-			data, err := serverData.manager.GetCertificate(id)
+			data, err := serverData.manager.GetCertificate(account.Id)
 			if err != nil {
 				http.Error(w, "certificate not found", http.StatusNotFound)
 				return
 			}
-			_ = writeOpenRow(w, r, id, which, label, string(data))
+			_ = writeOpenRow(w, r, account.Id, which, label, string(data))
 			return
 		case "key":
 			dir := serverData.manager.TlsConfigDir()
@@ -253,7 +217,7 @@ func CertHandler(serverData *ServerData) http.HandlerFunc {
 				http.Error(w, "tls dir not configured", http.StatusInternalServerError)
 				return
 			}
-			keyFileName := id + "-key.pem"
+			keyFileName := account.Id + "-key.pem"
 			keyPath, err := safeJoinFile(dir, keyFileName)
 			if err != nil {
 				http.Error(w, "invalid key path", http.StatusBadRequest)
@@ -264,7 +228,7 @@ func CertHandler(serverData *ServerData) http.HandlerFunc {
 				http.Error(w, "key not found", http.StatusNotFound)
 				return
 			}
-			_ = writeOpenRow(w, r, id, which, label, string(data))
+			_ = writeOpenRow(w, r, account.Id, which, label, string(data))
 			return
 		default:
 			http.Error(w, "invalid cert type", http.StatusBadRequest)
@@ -276,40 +240,20 @@ func CertHandler(serverData *ServerData) http.HandlerFunc {
 // CertDownloadHandler serves the certificate/key/ca as an attachment for download
 func CertDownloadHandler(serverData *ServerData) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id := chi.URLParam(r, "id")
 		which := chi.URLParam(r, "which")
 
-		if err := sanitizeId(id); err != nil {
-			http.Error(w, "invalid id", http.StatusBadRequest)
+		account, err := VerifyIdInRequestIsAvailable(serverData, r)
+		if err != nil {
+			slog.Error("VerifyIdInRequestIsAvailable(serverData, r)", slog.Any("error", err))
+			http.Error(w, "you don't have access to the signer", http.StatusInternalServerError)
 			return
 		}
+		if account == nil {
+			panic("account should never be nil at this point")
+		}
+
 		if _, err := sanitizeWhich(which); err != nil {
 			http.Error(w, "invalid type", http.StatusBadRequest)
-			return
-		}
-
-		if serverData == nil || serverData.manager == nil {
-			http.Error(w, "server not configured", http.StatusInternalServerError)
-			return
-		}
-
-		account, err := serverData.manager.GetAccountById(id)
-		if err != nil {
-			if err == sql.ErrNoRows {
-				http.Error(w, "account not found", http.StatusNotFound)
-				return
-			}
-			http.Error(w, "failed to load account", http.StatusInternalServerError)
-			return
-		}
-
-		audPub, err := GetAudience(r)
-		if err != nil {
-			http.Error(w, "invalid audience", http.StatusUnauthorized)
-			return
-		}
-		if !bytes.Equal(audPub.SerializeCompressed(), account.Npub) {
-			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
 
@@ -324,7 +268,7 @@ func CertDownloadHandler(serverData *ServerData) http.HandlerFunc {
 			}
 			fname = sanitizeFileName(account.Name) + "-ca.pem"
 		case "cert":
-			d, err := serverData.manager.GetCertificate(id)
+			d, err := serverData.manager.GetCertificate(account.Id)
 			if err != nil {
 				http.Error(w, "certificate not found", http.StatusNotFound)
 				return
@@ -337,7 +281,7 @@ func CertDownloadHandler(serverData *ServerData) http.HandlerFunc {
 				http.Error(w, "tls dir not configured", http.StatusInternalServerError)
 				return
 			}
-			keyFileName := id + "-key.pem"
+			keyFileName := account.Id + "-key.pem"
 			keyPath, err := safeJoinFile(dir, keyFileName)
 			if err != nil {
 				http.Error(w, "invalid key path", http.StatusBadRequest)
@@ -364,45 +308,23 @@ func CertDownloadHandler(serverData *ServerData) http.HandlerFunc {
 // HideCertHandler returns the closed row (blind text + closed-eye button)
 func HideCertHandler(serverData *ServerData) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id := chi.URLParam(r, "id")
-		which := chi.URLParam(r, "which")
-
-		if err := sanitizeId(id); err != nil {
-			http.Error(w, "invalid id", http.StatusBadRequest)
+		account, err := VerifyIdInRequestIsAvailable(serverData, r)
+		if err != nil {
+			slog.Error("VerifyIdInRequestIsAvailable(serverData, r)", slog.Any("error", err))
+			http.Error(w, "you don't have access to the signer", http.StatusInternalServerError)
 			return
 		}
+		if account == nil {
+			panic("account should never be nil at this point")
+		}
+		which := chi.URLParam(r, "which")
 		label, err := sanitizeWhich(which)
 		if err != nil {
 			http.Error(w, "invalid type", http.StatusBadRequest)
 			return
 		}
 
-		if serverData == nil || serverData.manager == nil {
-			http.Error(w, "server not configured", http.StatusInternalServerError)
-			return
-		}
-
-		account, err := serverData.manager.GetAccountById(id)
-		if err != nil {
-			if err == sql.ErrNoRows {
-				http.Error(w, "account not found", http.StatusNotFound)
-				return
-			}
-			http.Error(w, "failed to load account", http.StatusInternalServerError)
-			return
-		}
-
-		audPub, err := GetAudience(r)
-		if err != nil {
-			http.Error(w, "invalid audience", http.StatusUnauthorized)
-			return
-		}
-		if !bytes.Equal(audPub.SerializeCompressed(), account.Npub) {
-			http.Error(w, "forbidden", http.StatusForbidden)
-			return
-		}
-
-		_ = writeClosedRow(w, r, id, which, label)
+		_ = writeClosedRow(w, r, account.Id, which, label)
 	}
 }
 
@@ -416,14 +338,17 @@ func KeysetsListHandler(serverData *ServerData) http.HandlerFunc {
 			panic("Manager should never be null at this point")
 		}
 
-		id, err := VerifyIdInRequestIsAvailable(serverData, r)
+		account, err := VerifyIdInRequestIsAvailable(serverData, r)
 		if err != nil {
 			slog.Error("VerifyIdInRequestIsAvailable(serverData, r)", slog.Any("error", err))
 			http.Error(w, "you don't have access to the signer", http.StatusInternalServerError)
 			return
 		}
+		if account == nil {
+			panic("account should never be nil at this point")
+		}
 		// Fetch seeds (keysets)
-		seeds, err := serverData.manager.GetKeysetsForAccount(r.Context(), id)
+		seeds, err := serverData.manager.GetKeysetsForAccount(r.Context(), account.Id)
 		if err != nil {
 			slog.Error("GetKeysetsForAccount", slog.Any("error", err))
 			http.Error(w, "failed to load keysets", http.StatusInternalServerError)
@@ -446,34 +371,14 @@ func KeysetsListHandler(serverData *ServerData) http.HandlerFunc {
 // Simplified: only accept form submissions and require the "name" field
 func ChangeSignerActivation(serverData *ServerData) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id := chi.URLParam(r, "id")
-		if err := sanitizeId(id); err != nil {
-			http.Error(w, "invalid id", http.StatusBadRequest)
-			return
-		}
-		if serverData == nil || serverData.manager == nil {
-			http.Error(w, "server not configured", http.StatusInternalServerError)
-			return
-		}
-
-		// Authorization: ensure requester matches account
-		account, err := serverData.manager.GetAccountById(id)
+		account, err := VerifyIdInRequestIsAvailable(serverData, r)
 		if err != nil {
-			if err == sql.ErrNoRows {
-				http.Error(w, "account not found", http.StatusNotFound)
-				return
-			}
-			http.Error(w, "failed to load account", http.StatusInternalServerError)
+			slog.Error("VerifyIdInRequestIsAvailable(serverData, r)", slog.Any("error", err))
+			http.Error(w, "you don't have access to the signer", http.StatusInternalServerError)
 			return
 		}
-		audPub, err := GetAudience(r)
-		if err != nil {
-			http.Error(w, "invalid audience", http.StatusUnauthorized)
-			return
-		}
-		if !bytes.Equal(audPub.SerializeCompressed(), account.Npub) {
-			http.Error(w, "forbidden", http.StatusForbidden)
-			return
+		if account == nil {
+			panic("account should never be nil at this point")
 		}
 
 		// Ensure request is a form submission
@@ -494,14 +399,14 @@ func ChangeSignerActivation(serverData *ServerData) http.HandlerFunc {
 			return
 		}
 
-		if err := serverData.manager.UpdateAccountName(r.Context(), id, newName); err != nil {
+		if err := serverData.manager.UpdateAccountName(r.Context(), account.Id, newName); err != nil {
 			slog.Error("UpdateAccountName failed", slog.Any("error", err))
 			http.Error(w, "failed to update", http.StatusInternalServerError)
 			return
 		}
 
 		// Fetch updated account and render the whole card fragment so HTMX can swap the card
-		updatedAccount, err := serverData.manager.GetAccountById(id)
+		updatedAccount, err := serverData.manager.GetAccountById(account.Id)
 		if err != nil {
 			slog.Error("GetAccountById after update failed", slog.Any("error", err))
 			http.Error(w, "failed to load account", http.StatusInternalServerError)
@@ -523,43 +428,25 @@ func ChangeSignerActivation(serverData *ServerData) http.HandlerFunc {
 // ToggleAccountActiveHandler toggles the active status of an account and its seeds
 func ToggleAccountActiveHandler(serverData *ServerData) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id := chi.URLParam(r, "id")
-		if err := sanitizeId(id); err != nil {
-			http.Error(w, "invalid id", http.StatusBadRequest)
-			return
-		}
-
-		if serverData == nil || serverData.manager == nil {
-			http.Error(w, "server not configured", http.StatusInternalServerError)
-			return
-		}
-
-		// If active not specified correctly, get the current state and flip it
-		currentActive, err := serverData.manager.GetAccountActive(r.Context(), id)
+		account, err := VerifyIdInRequestIsAvailable(serverData, r)
 		if err != nil {
-			slog.Error("GetAccountActive", slog.Any("error", err))
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			slog.Error("VerifyIdInRequestIsAvailable(serverData, r)", slog.Any("error", err))
+			http.Error(w, "you don't have access to the signer", http.StatusInternalServerError)
 			return
 		}
+		if account == nil {
+			panic("account should never be nil at this point")
+		}
+		account.Active = !account.Active
 
 		// Toggle the account active status
-		if err := serverData.manager.SetAccountActive(r.Context(), id, !currentActive); err != nil {
+		if err := serverData.manager.SetAccountActive(r.Context(), account.Id, account.Active); err != nil {
 			slog.Error("SetAccountActive", slog.Any("error", err))
 			http.Error(w, "failed to update", http.StatusInternalServerError)
 			return
 		}
 
-		// Get updated account to pass to template
-		account, err := serverData.manager.GetAccountById(id)
-		if err != nil {
-			slog.Error("GetAccountById after toggle", slog.Any("error", err))
-			http.Error(w, "failed to load account", http.StatusInternalServerError)
-			return
-		}
-
 		// Render just the button fragment for HTMX swap
-		templates.SignerToggleButton(account.Id, !currentActive).Render(r.Context(), w)
+		templates.SignerToggleButton(account.Id, account.Active).Render(r.Context(), w)
 	}
 }
-
-// CertHandler serves certificate content for HTMX requests. {which} is ca, cert, or key
