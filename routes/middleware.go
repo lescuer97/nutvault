@@ -65,6 +65,9 @@ func AuthMiddleware(db database.SqliteDB) grpc.UnaryServerInterceptor {
 			slog.Warn("error looking up account by fingerprint", slog.String("error", err.Error()))
 			return nil, status.Error(codes.Unauthenticated, "unknown client certificate")
 		}
+		if !account.Active {
+			return nil, status.Error(codes.Unavailable, "Your key is inactive")
+		}
 
 		signerInfo := signer.SignerInfo{
 			AccountId:  account.Id,
