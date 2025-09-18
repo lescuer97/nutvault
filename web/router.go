@@ -68,6 +68,7 @@ func NewRouter(serverData *ServerData) http.Handler {
 		r.Get("/cert/{id}/{which}/download", CertDownloadHandler(serverData))
 		// Hide endpoint to restore closed-eye button
 		r.Get("/cert/{id}/{which}/hide", HideCertHandler(serverData))
+		r.Post("/accounts/{id}/toggle-active", ToggleAccountActiveHandler(serverData))
 	})
 
 	return router

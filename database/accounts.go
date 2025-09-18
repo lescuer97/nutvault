@@ -121,6 +121,17 @@ func (s *SqliteDB) UpdateAccountName(id string, name string) error {
 	_, err = stmt.Exec(name, id)
 	return err
 }
+// UpdateAccountName updates the name of an account identified by id.
+func (s *SqliteDB) UpdateAccountActive(id string, active bool) error {
+	stmt, err := s.Db.Prepare("UPDATE accounts SET active = ? WHERE id = ?")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(active, id)
+	return err
+}
 
 type AccountWithSeeds struct {
 	*Account

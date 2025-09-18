@@ -23,6 +23,7 @@ templ SignerDashboard(account database.Account) {
 		<div class="container mx-auto py-8 px-6">
 			<div class="flex items-center justify-between mb-6">
 				<h1 class="text-2xl font-semibold tracking-tight">Signer Dashboard</h1>
+				@SignerToggleButton(account.Id, account.Active)
 			</div>
 			<div class="flex flex-col md:flex-row gap-6">
 				<div class="md:w-1/3">

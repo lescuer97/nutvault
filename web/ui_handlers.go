@@ -3,14 +3,11 @@ package web
 import (
 	"bytes"
 	"database/sql"
-	"errors"
 	"log/slog"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
@@ -23,71 +20,6 @@ var (
 	// allowed which values
 	allowedWhich = map[string]string{"ca": "CA Certificate", "cert": "TLS Certificate", "key": "TLS Key"}
 )
-
-func sanitizeId(id string) error {
-	if id == "" {
-		return errors.New("empty id")
-	}
-	// validate hex length 64
-	if err := validate.Var(id, "required,len=64,hexadecimal"); err != nil {
-		return err
-	}
-	return nil
-}
-
-func sanitizeWhich(which string) (string, error) {
-	// use validator oneof for allowed values
-	if err := validate.Var(which, "required,oneof=ca cert key"); err != nil {
-		return "", err
-	}
-	return allowedWhich[which], nil
-}
-
-// ensure the resolved file path stays within baseDir to prevent directory traversal
-func safeJoinFile(baseDir, fileName string) (string, error) {
-	if strings.Contains(fileName, "..") || strings.ContainsAny(fileName, "/\\") {
-		return "", errors.New("invalid filename")
-	}
-	joined := filepath.Join(baseDir, fileName)
-	absJoined, err := filepath.Abs(joined)
-	if err != nil {
-		return "", err
-	}
-	absBase, err := filepath.Abs(baseDir)
-	if err != nil {
-		return "", err
-	}
-	// ensure trailing separator on base for prefix check
-	baseWithSep := absBase
-	if !strings.HasSuffix(baseWithSep, string(os.PathSeparator)) {
-		baseWithSep = baseWithSep + string(os.PathSeparator)
-	}
-	if !strings.HasPrefix(absJoined, baseWithSep) {
-		return "", errors.New("path escapes base directory")
-	}
-	return absJoined, nil
-}
-
-// sanitizeFileName makes a safe short filename from an account name
-func sanitizeFileName(name string) string {
-	if name == "" {
-		return "account"
-	}
-	// replace spaces with underscores
-	name = strings.ReplaceAll(name, " ", "_")
-	// map to allowed chars: letters, digits, '-', '_', '.'
-	mapped := strings.Map(func(r rune) rune {
-		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || unicode.IsDigit(r) || r == '-' || r == '_' || r == '.' {
-			return r
-		}
-		return '_'
-	}, name)
-	// trim length
-	if len(mapped) > 200 {
-		mapped = mapped[:200]
-	}
-	return mapped
-}
 
 // helper: render a closed row with blind text and closed-eye button
 func writeClosedRow(w http.ResponseWriter, r *http.Request, accountId, which, label string) error {
@@ -477,36 +409,19 @@ func HideCertHandler(serverData *ServerData) http.HandlerFunc {
 // KeysetsListHandler returns the keysets fragment with ownership verification
 func KeysetsListHandler(serverData *ServerData) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id := chi.URLParam(r, "id")
-		if err := sanitizeId(id); err != nil {
-			http.Error(w, "invalid id", http.StatusBadRequest)
-			return
+		if serverData == nil {
+			panic("Server data should not be nil ever at this point")
 		}
-		if serverData == nil || serverData.manager == nil {
-			http.Error(w, "server not configured", http.StatusInternalServerError)
-			return
+		if serverData.manager == nil {
+			panic("Manager should never be null at this point")
 		}
 
-		// Ownership verification (same pattern as other handlers)
-		account, err := serverData.manager.GetAccountById(id)
+		id, err := VerifyIdInRequestIsAvailable(serverData, r)
 		if err != nil {
-			if err == sql.ErrNoRows {
-				http.NotFound(w, r)
-				return
-			}
-			http.Error(w, "failed to load account", http.StatusInternalServerError)
+			slog.Error("VerifyIdInRequestIsAvailable(serverData, r)", slog.Any("error", err))
+			http.Error(w, "you don't have access to the signer", http.StatusInternalServerError)
 			return
 		}
-		audPub, err := GetAudience(r)
-		if err != nil {
-			http.Error(w, "invalid audience", http.StatusUnauthorized)
-			return
-		}
-		if !bytes.Equal(audPub.SerializeCompressed(), account.Npub) {
-			http.Error(w, "forbidden", http.StatusForbidden)
-			return
-		}
-
 		// Fetch seeds (keysets)
 		seeds, err := serverData.manager.GetKeysetsForAccount(r.Context(), id)
 		if err != nil {
@@ -526,3 +441,125 @@ func KeysetsListHandler(serverData *ServerData) http.HandlerFunc {
 		_, _ = w.Write(buf.Bytes())
 	}
 }
+
+// API endpoint to update account name
+// Simplified: only accept form submissions and require the "name" field
+func ChangeSignerActivation(serverData *ServerData) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		if err := sanitizeId(id); err != nil {
+			http.Error(w, "invalid id", http.StatusBadRequest)
+			return
+		}
+		if serverData == nil || serverData.manager == nil {
+			http.Error(w, "server not configured", http.StatusInternalServerError)
+			return
+		}
+
+		// Authorization: ensure requester matches account
+		account, err := serverData.manager.GetAccountById(id)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				http.Error(w, "account not found", http.StatusNotFound)
+				return
+			}
+			http.Error(w, "failed to load account", http.StatusInternalServerError)
+			return
+		}
+		audPub, err := GetAudience(r)
+		if err != nil {
+			http.Error(w, "invalid audience", http.StatusUnauthorized)
+			return
+		}
+		if !bytes.Equal(audPub.SerializeCompressed(), account.Npub) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+
+		// Ensure request is a form submission
+		ct := r.Header.Get("Content-Type")
+		if !strings.HasPrefix(ct, "application/x-www-form-urlencoded") && !strings.HasPrefix(ct, "multipart/form-data") {
+			http.Error(w, "expected form submission", http.StatusBadRequest)
+			return
+		}
+
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+
+		newName := strings.TrimSpace(r.FormValue("name"))
+		if newName == "" {
+			http.Error(w, "empty name", http.StatusBadRequest)
+			return
+		}
+
+		if err := serverData.manager.UpdateAccountName(r.Context(), id, newName); err != nil {
+			slog.Error("UpdateAccountName failed", slog.Any("error", err))
+			http.Error(w, "failed to update", http.StatusInternalServerError)
+			return
+		}
+
+		// Fetch updated account and render the whole card fragment so HTMX can swap the card
+		updatedAccount, err := serverData.manager.GetAccountById(id)
+		if err != nil {
+			slog.Error("GetAccountById after update failed", slog.Any("error", err))
+			http.Error(w, "failed to load account", http.StatusInternalServerError)
+			return
+		}
+
+		var buf bytes.Buffer
+		if err := templates.KeyCardNoButton(*updatedAccount).Render(r.Context(), &buf); err != nil {
+			slog.Error("render card fragment failed", slog.Any("error", err))
+			http.Error(w, "render failed", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(buf.Bytes())
+	}
+}
+
+// ToggleAccountActiveHandler toggles the active status of an account and its seeds
+func ToggleAccountActiveHandler(serverData *ServerData) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		if err := sanitizeId(id); err != nil {
+			http.Error(w, "invalid id", http.StatusBadRequest)
+			return
+		}
+
+		if serverData == nil || serverData.manager == nil {
+			http.Error(w, "server not configured", http.StatusInternalServerError)
+			return
+		}
+
+		// If active not specified correctly, get the current state and flip it
+		currentActive, err := serverData.manager.GetAccountActive(r.Context(), id)
+		if err != nil {
+			slog.Error("GetAccountActive", slog.Any("error", err))
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+
+		// Toggle the account active status
+		if err := serverData.manager.SetAccountActive(r.Context(), id, !currentActive); err != nil {
+			slog.Error("SetAccountActive", slog.Any("error", err))
+			http.Error(w, "failed to update", http.StatusInternalServerError)
+			return
+		}
+
+		// Get updated account to pass to template
+		account, err := serverData.manager.GetAccountById(id)
+		if err != nil {
+			slog.Error("GetAccountById after toggle", slog.Any("error", err))
+			http.Error(w, "failed to load account", http.StatusInternalServerError)
+			return
+		}
+
+		// Render just the button fragment for HTMX swap
+		templates.SignerToggleButton(account.Id, !currentActive).Render(r.Context(), w)
+	}
+}
+
+// CertHandler serves certificate content for HTMX requests. {which} is ca, cert, or key

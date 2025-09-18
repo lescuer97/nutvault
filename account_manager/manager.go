@@ -228,3 +228,35 @@ func (m *Manager) GetKeysetsForAccount(ctx context.Context, accountId string) ([
 	}
 	return seeds, nil
 }
+
+// SetAccountActive sets the active status for all seeds belonging to an account
+func (m *Manager) SetAccountActive(ctx context.Context, accountID string, active bool) error {
+	if m == nil || m.db == nil || m.db.Db == nil {
+		return fmt.Errorf("manager database is not initialized")
+	}
+
+	// Update all seeds for this account
+	if err := m.db.UpdateAccountActive(accountID, active); err != nil {
+		return fmt.Errorf("UpdateSeedsActiveStatus: %w", err)
+	}
+
+
+	return nil
+}
+
+// GetAccountActive returns the active status for an account by checking if any of its seeds are active
+func (m *Manager) GetAccountActive(ctx context.Context, accountID string) (bool, error) {
+	if m == nil || m.db == nil || m.db.Db == nil {
+		return false, fmt.Errorf("manager database is not initialized")
+	}
+
+	// Get all seeds for this account and check if any are active
+	account, err := m.db.GetAccountById(accountID)
+	if err != nil {
+		return false, fmt.Errorf("GetSeedsByAccountId: %w", err)
+	}
+
+	// Check if any seed is active
+
+	return account.Active, nil
+}
