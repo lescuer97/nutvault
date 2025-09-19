@@ -6,7 +6,6 @@ import (
 	"crypto/x509"
 	"database/sql"
 	"encoding/hex"
-	"log"
 	"log/slog"
 	"nutmix_remote_signer/database"
 	"nutmix_remote_signer/signer"
@@ -35,11 +34,7 @@ func AuthMiddleware(db database.SqliteDB) grpc.UnaryServerInterceptor {
 		}
 
 		var leaf *x509.Certificate
-		log.Printf("\n tlsInfo.State.VerifiedChains. %+v", tlsInfo.State.VerifiedChains)
-		log.Printf("\n tlsInfo.State.PeerCertificates. %+v", tlsInfo.State.PeerCertificates)
-		if len(tlsInfo.State.VerifiedChains) > 0 && len(tlsInfo.State.VerifiedChains[0]) > 0 {
-			leaf = tlsInfo.State.VerifiedChains[0][0]
-		} else if len(tlsInfo.State.PeerCertificates) > 0 {
+		if len(tlsInfo.State.PeerCertificates) > 0 {
 			leaf = tlsInfo.State.PeerCertificates[0]
 		}
 
@@ -69,6 +64,7 @@ func AuthMiddleware(db database.SqliteDB) grpc.UnaryServerInterceptor {
 			return nil, status.Error(codes.Unavailable, "Your key is inactive")
 		}
 
+		slog.Debug("received request from signer", slog.String("signer_name", account.Name), slog.String("id", account.Id))
 		signerInfo := signer.SignerInfo{
 			AccountId:  account.Id,
 			Derivation: uint32(account.Derivation),

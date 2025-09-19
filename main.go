@@ -118,6 +118,9 @@ func main() {
 		grpc.ChainUnaryInterceptor(routes.AuthMiddleware(sqlite)),
 	)
 
+	if signer == nil {
+		panic("signer should never have been nil at this point")
+	}
 	// Register the service
 	sig.RegisterSignerServiceServer(signerGRPCServer, &routes.Server{
 		Signer: signer,

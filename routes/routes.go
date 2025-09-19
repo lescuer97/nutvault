@@ -15,7 +15,7 @@ import (
 )
 
 type Server struct {
-	Signer signer.Signer
+	Signer *signer.Signer
 	sig.SignerServiceServer
 }
 

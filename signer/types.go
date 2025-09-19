@@ -77,9 +77,9 @@ func (s *Signer) GenerateMintKeysFromPublicKeysets(keysetIndex KeysetGenerationI
 	}
 
 	slog.Debug(fmt.Sprintf("\n generating keys for %v keysets\n ", len(keysetIndex)))
-	signer, exists := s.signers[signerInfo.AccountId]
-	if !exists {
-		return privateKeysets, fmt.Errorf("signer account does not exists. %w", err)
+	signer, err := s.signers.GetAccount(signerInfo.AccountId)
+	if err != nil {
+		return privateKeysets, fmt.Errorf("Account does not exists")
 	}
 	keysetsMap := signer.GetKeysetsMapCopy()
 	for i, val := range keysetsMap {
