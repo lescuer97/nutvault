@@ -17,7 +17,7 @@ import (
 
 var ErrNpubDoesNotOwnSignerId = errors.New("Npub does not own signer")
 
-func VerifyIdInRequestIsAvailable(serverData *ServerData, request *http.Request) (*database.Account, error) {
+func VerifyIdInRequestIsAvailable(serverData *ServerData, request *http.Request) (*database.IndividualKey, error) {
 	id := chi.URLParam(request, "id")
 	if serverData == nil {
 		log.Panicf("Server data should not be nil ever at this point")

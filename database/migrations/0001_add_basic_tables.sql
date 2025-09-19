@@ -1,6 +1,5 @@
 -- +goose Up
-
-CREATE TABLE accounts (
+CREATE TABLE keys (
     active bool NOT NULL,
     npub blob NOT NULL,
     id text NOT NULL,
@@ -45,4 +44,3 @@ DROP INDEX idx_seed_account_id;
 DROP INDEX idx_account_id;
 DROP INDEX idx_account_npub;
 DROP INDEX IF EXISTS idx_account_client_pubkey_fp;
--- auth_tokens cleanup removed

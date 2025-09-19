@@ -29,48 +29,48 @@ import (
 
 type KeysetGenerationIndexes map[string]map[uint64]int
 
-type Signers struct {
-	signers map[string]KeysetStore
+type KeysManager struct {
+	keys map[string]KeysetStore
 	sync.RWMutex
 }
 
-func (s *Signers) AddAccount(id string, store KeysetStore) error {
+func (s *KeysManager) AddAccount(id string, store KeysetStore) error {
 	s.Lock()
 	defer s.Unlock()
 
-	_, ok := s.signers[id]
+	_, ok := s.keys[id]
 	if ok {
 		return fmt.Errorf("This account already exists")
 	}
-	s.signers[id] = store
+	s.keys[id] = store
 
 	return nil
 }
-func (s *Signers) ChangeAccount(id string, store KeysetStore) error {
+func (s *KeysManager) ChangeAccount(id string, store KeysetStore) error {
 	s.Lock()
 	defer s.Unlock()
 
-	_, ok := s.signers[id]
+	_, ok := s.keys[id]
 	if !ok {
 		return fmt.Errorf("There are no accounts for this id")
 	}
-	s.signers[id] = store
+	s.keys[id] = store
 
 	return nil
 }
-func (s *Signers) GetAccount(id string) (KeysetStore, error) {
+func (s *KeysManager) GetAccount(id string) (KeysetStore, error) {
 	s.Lock()
 	defer s.Unlock()
 
-	store, ok := s.signers[id]
+	store, ok := s.keys[id]
 	if !ok {
 		return KeysetStore{}, fmt.Errorf("There are no accounts for this id")
 	}
 	return store, nil
 }
 
-type Signer struct {
-	signers        Signers
+type MultiAccountSigner struct {
+	keysManager        KeysManager
 	db             database.SqliteDB
 	expirationTime time.Time
 }
@@ -80,11 +80,11 @@ type SignerInfo struct {
 	Derivation uint32
 }
 
-func SetupLocalSigner(db database.SqliteDB, config Config) (*Signer, error) {
-	signer := Signer{
+func SetupLocalSigner(db database.SqliteDB, config Config) (*MultiAccountSigner, error) {
+	signer := MultiAccountSigner{
 		db: db,
-		signers: Signers{
-			signers: make(map[string]KeysetStore),
+		keysManager: KeysManager{
+			keys: make(map[string]KeysetStore),
 		},
 		expirationTime: config.ExpireTime,
 	}
@@ -163,7 +163,7 @@ func SetupLocalSigner(db database.SqliteDB, config Config) (*Signer, error) {
 			return &signer, fmt.Errorf(`derivedSignerKey.ECPubKey(). %w`, err)
 		}
 		store.SetPubkey(pubkey)
-		err = signer.signers.AddAccount(accountBySeeds[i].Id, store)
+		err = signer.keysManager.AddAccount(accountBySeeds[i].Id, store)
 		if err != nil {
 			return &signer, fmt.Errorf(`signer.signers.AddAccount(accountBySeeds[i].Id, store). %w`, err)
 		}
@@ -172,9 +172,9 @@ func SetupLocalSigner(db database.SqliteDB, config Config) (*Signer, error) {
 	return &signer, nil
 }
 
-func (l *Signer) GetKeysets(signerInfo SignerInfo) ([]MintPublicKeyset, error) {
+func (l *MultiAccountSigner) GetKeysets(signerInfo SignerInfo) ([]MintPublicKeyset, error) {
 	response := []MintPublicKeyset{}
-	signer, err := l.signers.GetAccount(signerInfo.AccountId)
+	signer, err := l.keysManager.GetAccount(signerInfo.AccountId)
 	if err != nil {
 		return nil, fmt.Errorf("Account does not exists")
 	}
@@ -185,7 +185,7 @@ func (l *Signer) GetKeysets(signerInfo SignerInfo) ([]MintPublicKeyset, error) {
 	return response, nil
 }
 
-func (l *Signer) getMasterBip85Key() (*bip85.Bip85, error) {
+func (l *MultiAccountSigner) getMasterBip85Key() (*bip85.Bip85, error) {
 	seedFromDBUS, err := getNutmixSignerKey()
 	defer func() {
 		seedFromDBUS = ""
@@ -201,7 +201,7 @@ func (l *Signer) getMasterBip85Key() (*bip85.Bip85, error) {
 	return bip85Key, nil
 }
 
-func (l *Signer) getDerivedMasterKey(bip85Key *bip85.Bip85, derivation uint32) (*hdkeychain.ExtendedKey, error) {
+func (l *MultiAccountSigner) getDerivedMasterKey(bip85Key *bip85.Bip85, derivation uint32) (*hdkeychain.ExtendedKey, error) {
 	derivedKey, err := bip85Key.DeriveToXpriv(derivation)
 	defer func() {
 		derivedKey = nil
@@ -217,7 +217,7 @@ func (l *Signer) getDerivedMasterKey(bip85Key *bip85.Bip85, derivation uint32) (
 	return derivedSignerKey, nil
 }
 
-func (l *Signer) createNewSeed(mintPrivateKey *hdkeychain.ExtendedKey, unit cashu.Unit, version uint64, fee uint, amounts []uint64, expiry_time time.Time) (database.Seed, error) {
+func (l *MultiAccountSigner) createNewSeed(mintPrivateKey *hdkeychain.ExtendedKey, unit cashu.Unit, version uint64, fee uint, amounts []uint64, expiry_time time.Time) (database.Seed, error) {
 	slog.Info("Generating new seed", slog.String("unit", unit.String()), slog.String("version", strconv.FormatInt(int64(version), 10)), slog.String("fee", strconv.FormatUint(uint64(fee), 10)))
 	// rotate one level up
 	newSeed := database.Seed{
@@ -246,7 +246,7 @@ func (l *Signer) createNewSeed(mintPrivateKey *hdkeychain.ExtendedKey, unit cash
 
 }
 
-func (l *Signer) RotateKeyset(signerInfo SignerInfo, unit cashu.Unit, fee uint64, amounts []uint64, expiry_time time.Time) (MintPublicKeyset, error) {
+func (l *MultiAccountSigner) RotateKeyset(signerInfo SignerInfo, unit cashu.Unit, fee uint64, amounts []uint64, expiry_time time.Time) (MintPublicKeyset, error) {
 	slog.Info("Rotating keyset", slog.String("unit", unit.String()), slog.String("fee", strconv.FormatUint(uint64(fee), 10)))
 	newKey := MintPublicKeyset{}
 
@@ -323,14 +323,14 @@ func (l *Signer) RotateKeyset(signerInfo SignerInfo, unit cashu.Unit, fee uint64
 		return newKey, fmt.Errorf(`tx.Commit(). %w`, err)
 	}
 
-	account, err := l.signers.GetAccount(signerInfo.AccountId)
+	account, err := l.keysManager.GetAccount(signerInfo.AccountId)
 	if err != nil {
 		return newKey, fmt.Errorf(`account signer is non existent. %w`, err)
 	}
 	account.SetAll(keysets, activeKeysets)
 	account.SetIndexesFromSeeds(seeds)
 
-	err = l.signers.ChangeAccount(signerInfo.AccountId, account)
+	err = l.keysManager.ChangeAccount(signerInfo.AccountId, account)
 	if err != nil {
 		return newKey, fmt.Errorf(`could not add account. %w`, err)
 	}
@@ -345,13 +345,13 @@ func (l *Signer) RotateKeyset(signerInfo SignerInfo, unit cashu.Unit, fee uint64
 	}()
 }
 
-func (l *Signer) SignBlindMessages(messages goNutsCashu.BlindedMessages, signerInfo SignerInfo) (goNutsCashu.BlindedSignatures, error) {
+func (l *MultiAccountSigner) SignBlindMessages(messages goNutsCashu.BlindedMessages, signerInfo SignerInfo) (goNutsCashu.BlindedSignatures, error) {
 	var blindedSignatures goNutsCashu.BlindedSignatures
 
 	indexesForGeneration := make(KeysetGenerationIndexes)
 
 	slog.Debug("Finding account from the signer")
-	signer, err := l.signers.GetAccount(signerInfo.AccountId)
+	signer, err := l.keysManager.GetAccount(signerInfo.AccountId)
 	if err != nil {
 		return nil, fmt.Errorf("Account does not exists")
 	}
@@ -424,11 +424,11 @@ func (l *Signer) SignBlindMessages(messages goNutsCashu.BlindedMessages, signerI
 
 }
 
-func (l *Signer) VerifyProofs(signerInfo SignerInfo, proofs goNutsCashu.Proofs, blindMessages goNutsCashu.BlindedMessages) error {
+func (l *MultiAccountSigner) VerifyProofs(signerInfo SignerInfo, proofs goNutsCashu.Proofs, blindMessages goNutsCashu.BlindedMessages) error {
 	indexesForGeneration := make(KeysetGenerationIndexes)
 
 	slog.Debug("Finding what amounts we need to create private keys for")
-	signer, err := l.signers.GetAccount(signerInfo.AccountId)
+	signer, err := l.keysManager.GetAccount(signerInfo.AccountId)
 	if err != nil {
 		return fmt.Errorf("Account does not exists")
 	}
@@ -470,7 +470,7 @@ func (l *Signer) VerifyProofs(signerInfo SignerInfo, proofs goNutsCashu.Proofs, 
 	return nil
 }
 
-func (l *Signer) validateProof(keysets map[string]MintKeyset, proof goNutsCashu.Proof) error {
+func (l *MultiAccountSigner) validateProof(keysets map[string]MintKeyset, proof goNutsCashu.Proof) error {
 	keyset, exists := keysets[proof.Id]
 	if !exists {
 		return cashu.ErrKeysetForProofNotFound
@@ -515,15 +515,15 @@ func (l *Signer) validateProof(keysets map[string]MintKeyset, proof goNutsCashu.
 }
 
 // returns serialized compressed public key
-func (l *Signer) GetSignerPubkey(signerInfo SignerInfo) ([]byte, error) {
-	signer, err := l.signers.GetAccount(signerInfo.AccountId)
+func (l *MultiAccountSigner) GetSignerPubkey(signerInfo SignerInfo) ([]byte, error) {
+	signer, err := l.keysManager.GetAccount(signerInfo.AccountId)
 	if err != nil {
 		return nil, fmt.Errorf("Account does not exists")
 	}
 	return signer.pubkey.SerializeCompressed(), nil
 }
 
-func (l *Signer) AddKeysToSignerFromAccount(accountId string, derivation uint32) error {
+func (l *MultiAccountSigner) AddKeysToSignerFromAccount(accountId string, derivation uint32) error {
 	slog.Info("Trying to get the Mint key")
 	bip85Master, err := l.getMasterBip85Key()
 	defer func() {
@@ -592,7 +592,7 @@ func (l *Signer) AddKeysToSignerFromAccount(accountId string, derivation uint32)
 		return fmt.Errorf(`derivedSignerKey.ECPubKey(). %w`, err)
 	}
 	store.SetPubkey(pubkey)
-	err = l.signers.AddAccount(accountId, store)
+	err = l.keysManager.AddAccount(accountId, store)
 	if err != nil {
 		return fmt.Errorf(`signer.signers.AddAccount(accountBySeeds[i].Id, store). %w`, err)
 	}

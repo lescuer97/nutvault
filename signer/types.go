@@ -57,7 +57,7 @@ func MakeMintPublickeys(mintKey MintKeyset) MintPublicKeyset {
 	return result
 }
 
-func (s *Signer) GenerateMintKeysFromPublicKeysets(keysetIndex KeysetGenerationIndexes, signerInfo SignerInfo) (map[string]MintKeyset, error) {
+func (s *MultiAccountSigner) GenerateMintKeysFromPublicKeysets(keysetIndex KeysetGenerationIndexes, signerInfo SignerInfo) (map[string]MintKeyset, error) {
 
 	privateKeysets := make(map[string]MintKeyset)
 
@@ -77,7 +77,7 @@ func (s *Signer) GenerateMintKeysFromPublicKeysets(keysetIndex KeysetGenerationI
 	}
 
 	slog.Debug(fmt.Sprintf("\n generating keys for %v keysets\n ", len(keysetIndex)))
-	signer, err := s.signers.GetAccount(signerInfo.AccountId)
+	signer, err := s.keysManager.GetAccount(signerInfo.AccountId)
 	if err != nil {
 		return privateKeysets, fmt.Errorf("Account does not exists")
 	}

@@ -9,7 +9,7 @@ import (
 	"github.com/fxamacker/cbor/v2"
 )
 
-type Account struct {
+type IndividualKey struct {
 	Active         bool   `json:"active" cbor:"active"`
 	Npub           []byte `json:"npub"   cbor:"npub"`
 	Id             string `json:"id"     cbor:"id"`
@@ -26,8 +26,8 @@ type Account struct {
 // is implemented correctly. See TODO/FIXME comments in the original
 // implementation.
 
-func (s *SqliteDB) CreateAccount(account *Account) error {
-	stmt, err := s.Db.Prepare("INSERT INTO accounts (active, npub, id, name, derivation, created_at, client_pubkey_fp) VALUES (?, ?, ?, ?, ?, ?, ?)")
+func (s *SqliteDB) CreateAccount(account *IndividualKey) error {
+	stmt, err := s.Db.Prepare("INSERT INTO keys (active, npub, id, name, derivation, created_at, client_pubkey_fp) VALUES (?, ?, ?, ?, ?, ?, ?)")
 	if err != nil {
 		return err
 	}
@@ -38,7 +38,7 @@ func (s *SqliteDB) CreateAccount(account *Account) error {
 }
 
 func (s *SqliteDB) FlipAccountActive(id string) error {
-	stmt, err := s.Db.Prepare("UPDATE accounts SET active = NOT active WHERE id = ?")
+	stmt, err := s.Db.Prepare("UPDATE keys SET active = NOT active WHERE id = ?")
 	if err != nil {
 		return err
 	}
@@ -48,10 +48,10 @@ func (s *SqliteDB) FlipAccountActive(id string) error {
 	return err
 }
 
-func (s *SqliteDB) GetAccountById(id string) (*Account, error) {
-	row := s.Db.QueryRow("SELECT active, npub, id, name, derivation, created_at, client_pubkey_fp FROM accounts WHERE id = ?", id)
+func (s *SqliteDB) GetAccountById(id string) (*IndividualKey, error) {
+	row := s.Db.QueryRow("SELECT active, npub, id, name, derivation, created_at, client_pubkey_fp FROM keys WHERE id = ?", id)
 
-	var account Account
+	var account IndividualKey
 	err := row.Scan(&account.Active, &account.Npub, &account.Id, &account.Name, &account.Derivation, &account.CreatedAt, &account.ClientPubkeyFP)
 	if err != nil {
 		return nil, err
@@ -60,11 +60,11 @@ func (s *SqliteDB) GetAccountById(id string) (*Account, error) {
 	return &account, nil
 }
 
-func (s *SqliteDB) GetAccountsByNpub(npub []byte) ([]Account, error) {
-	accounts := []Account{}
-	stmt, err := s.Db.Prepare("SELECT active, npub, id, name, derivation, created_at, client_pubkey_fp FROM accounts WHERE npub = ?")
+func (s *SqliteDB) GetAccountsByNpub(npub []byte) ([]IndividualKey, error) {
+	accounts := []IndividualKey{}
+	stmt, err := s.Db.Prepare("SELECT active, npub, id, name, derivation, created_at, client_pubkey_fp FROM keys WHERE npub = ?")
 	if err != nil {
-		return accounts, fmt.Errorf(`s.Db.Prepare("SELECT active, npub, id, name, derivation, created_at, client_pubkey_fp FROM accounts WHERE npub = ?"). %w`, err)
+		return accounts, fmt.Errorf(`s.Db.Prepare("SELECT active, npub, id, name, derivation, created_at, client_pubkey_fp FROM keys WHERE npub = ?"). %w`, err)
 	}
 	defer stmt.Close()
 
@@ -75,7 +75,7 @@ func (s *SqliteDB) GetAccountsByNpub(npub []byte) ([]Account, error) {
 	defer rows.Close()
 
 	for rows.Next() {
-		var account Account
+		var account IndividualKey
 		err := rows.Scan(&account.Active, &account.Npub, &account.Id, &account.Name, &account.Derivation, &account.CreatedAt, &account.ClientPubkeyFP)
 		if err != nil {
 			return nil, err
@@ -86,10 +86,10 @@ func (s *SqliteDB) GetAccountsByNpub(npub []byte) ([]Account, error) {
 	return accounts, nil
 }
 
-func (s *SqliteDB) GetAccountByNpub(npub []byte) (*Account, error) {
-	row := s.Db.QueryRow("SELECT active, npub, id, name, derivation, created_at, client_pubkey_fp FROM accounts WHERE npub = ?", npub)
+func (s *SqliteDB) GetAccountByNpub(npub []byte) (*IndividualKey, error) {
+	row := s.Db.QueryRow("SELECT active, npub, id, name, derivation, created_at, client_pubkey_fp FROM keys WHERE npub = ?", npub)
 
-	var account Account
+	var account IndividualKey
 	err := row.Scan(&account.Active, &account.Npub, &account.Id, &account.Name, &account.Derivation, &account.CreatedAt, &account.ClientPubkeyFP)
 	if err != nil {
 		return nil, err
@@ -98,13 +98,13 @@ func (s *SqliteDB) GetAccountByNpub(npub []byte) (*Account, error) {
 	return &account, nil
 }
 
-func (s *SqliteDB) GetAccountByClientPubkeyFP(ctx context.Context, fp string) (Account, error) {
-	row := s.Db.QueryRow("SELECT active, npub, id, name, derivation, created_at, client_pubkey_fp FROM accounts WHERE client_pubkey_fp = ?", fp)
+func (s *SqliteDB) GetAccountByClientPubkeyFP(ctx context.Context, fp string) (IndividualKey, error) {
+	row := s.Db.QueryRow("SELECT active, npub, id, name, derivation, created_at, client_pubkey_fp FROM keys WHERE client_pubkey_fp = ?", fp)
 
-	var account Account
+	var account IndividualKey
 	err := row.Scan(&account.Active, &account.Npub, &account.Id, &account.Name, &account.Derivation, &account.CreatedAt, &account.ClientPubkeyFP)
 	if err != nil {
-		return Account{}, err
+		return IndividualKey{}, err
 	}
 
 	return account, nil
@@ -112,7 +112,7 @@ func (s *SqliteDB) GetAccountByClientPubkeyFP(ctx context.Context, fp string) (A
 
 // UpdateAccountName updates the name of an account identified by id.
 func (s *SqliteDB) UpdateAccountName(id string, name string) error {
-	stmt, err := s.Db.Prepare("UPDATE accounts SET name = ? WHERE id = ?")
+	stmt, err := s.Db.Prepare("UPDATE keys SET name = ? WHERE id = ?")
 	if err != nil {
 		return err
 	}
@@ -124,7 +124,7 @@ func (s *SqliteDB) UpdateAccountName(id string, name string) error {
 
 // UpdateAccountName updates the name of an account identified by id.
 func (s *SqliteDB) UpdateAccountActive(id string, active bool) error {
-	stmt, err := s.Db.Prepare("UPDATE accounts SET active = ? WHERE id = ?")
+	stmt, err := s.Db.Prepare("UPDATE keys SET active = ? WHERE id = ?")
 	if err != nil {
 		return err
 	}
@@ -135,7 +135,7 @@ func (s *SqliteDB) UpdateAccountActive(id string, active bool) error {
 }
 
 type AccountWithSeeds struct {
-	*Account
+	*IndividualKey
 	Seeds []Seed `json:"seeds"`
 }
 
@@ -145,7 +145,7 @@ func (s *SqliteDB) GetAccountsWithSeeds() ([]AccountWithSeeds, error) {
 			a.active, a.npub, a.id, a.name, a.derivation, a.created_at,
 			s.active, s.unit, s.id, s.created_at, s.input_fee_ppk, s.version, s.legacy, s.amounts, s.account_id
 		FROM
-			accounts a
+			keys a
 		LEFT JOIN
 			seeds s ON a.id = s.account_id`
 
@@ -158,7 +158,7 @@ func (s *SqliteDB) GetAccountsWithSeeds() ([]AccountWithSeeds, error) {
 	accountsMap := make(map[string]*AccountWithSeeds)
 
 	for rows.Next() {
-		var account Account
+		var account IndividualKey
 		var seed Seed
 		var seedActive sql.NullBool
 		var seedUnit, seedId, seedAmounts, seedAccountId sql.NullString
@@ -174,8 +174,8 @@ func (s *SqliteDB) GetAccountsWithSeeds() ([]AccountWithSeeds, error) {
 
 		if _, ok := accountsMap[account.Id]; !ok {
 			accountsMap[account.Id] = &AccountWithSeeds{
-				Account: &account,
-				Seeds:   []Seed{},
+				IndividualKey: &account,
+				Seeds:         []Seed{},
 			}
 		}
 

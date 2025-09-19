@@ -26,13 +26,13 @@ type Manager struct {
 	caCertPEM    []byte
 	caKeyPEM     []byte
 	tlsConfigDir string
-	signer       *signer.Signer
+	signer       *signer.MultiAccountSigner
 }
 
 // NewManager returns a Manager and ensures the provided tlsDir exists.
 // If tlsDir is empty it defaults to $HOME/.config/nutvault/certificates.
 // The function attempts to create the directory with mode 0700 if it doesn't exist.
-func NewManager(db *database.SqliteDB, caCertPEM, caKeyPEM []byte, tlsDir string, signer *signer.Signer) Manager {
+func NewManager(db *database.SqliteDB, caCertPEM, caKeyPEM []byte, tlsDir string, signer *signer.MultiAccountSigner) Manager {
 	m := Manager{db: db, signer: signer}
 	m.caCertPEM = caCertPEM
 	m.caKeyPEM = caKeyPEM
@@ -66,7 +66,7 @@ func NewManager(db *database.SqliteDB, caCertPEM, caKeyPEM []byte, tlsDir string
 // is generated, saved to disk (name = account id), and the generated public key
 // PEM is used to compute ClientPubkeyFP which is stored on the account before saving.
 // If TLS generation fails, CreateAccount will return an error and not persist the account.
-func (m *Manager) CreateAccount(ctx context.Context, pubkey *btcec.PublicKey) (*database.Account, error) {
+func (m *Manager) CreateAccount(ctx context.Context, pubkey *btcec.PublicKey) (*database.IndividualKey, error) {
 	if m.db == nil {
 		log.Panicf("database should not be nil")
 	}
@@ -91,7 +91,7 @@ func (m *Manager) CreateAccount(ctx context.Context, pubkey *btcec.PublicKey) (*
 	derivation := makeDerivation(pubkey, idBytes)
 	derivationInt := binary.LittleEndian.Uint32(derivation)
 
-	acc := database.Account{
+	acc := database.IndividualKey{
 		Active:     true,
 		Npub:       npub,
 		Id:         id,
@@ -148,7 +148,7 @@ func (m *Manager) UpdateAccountName(ctx context.Context, id string, name string)
 	return m.db.UpdateAccountName(id, name)
 }
 
-func (m *Manager) GetAccountsFromNpub(pubkey *secp256k1.PublicKey) ([]database.Account, error) {
+func (m *Manager) GetAccountsFromNpub(pubkey *secp256k1.PublicKey) ([]database.IndividualKey, error) {
 	if m.db == nil {
 		log.Panicf("database should not be nil")
 	}
@@ -165,7 +165,7 @@ func (m *Manager) GetAccountsFromNpub(pubkey *secp256k1.PublicKey) ([]database.A
 	}
 	return accounts, nil
 }
-func (m *Manager) GetAccountById(id string) (*database.Account, error) {
+func (m *Manager) GetAccountById(id string) (*database.IndividualKey, error) {
 	account, err := m.db.GetAccountById(id)
 	if err != nil {
 		return nil, err

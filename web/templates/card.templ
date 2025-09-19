@@ -4,7 +4,7 @@ import "time"
 import "encoding/hex"
 import "nutmix_remote_signer/database"
 
-templ KeyCard(acct database.Account) {
+templ KeyCard(acct database.IndividualKey) {
 	<div id={ "card-" + acct.Id } class="rounded-xl border bg-white p-4 shadow-sm hover:shadow-md transition overflow-hidden">
 		<div class="flex items-center justify-between">
 			<div>
@@ -31,7 +31,7 @@ templ KeyCard(acct database.Account) {
 	</div>
 }
 
-templ KeyCardNoButton(acct database.Account) {
+templ KeyCardNoButton(acct database.IndividualKey) {
 	// The entire card is wrapped so HTMX can replace the whole element when the name is updated
 	<div id={ "card-" + acct.Id } class="rounded-xl border bg-white p-4 shadow-sm hover:shadow-md transition overflow-hidden">
 		<div class="flex items-center justify-between">

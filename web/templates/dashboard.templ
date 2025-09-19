@@ -2,7 +2,7 @@ package templates
 
 import "nutmix_remote_signer/database"
 
-templ Dashboard(accounts []database.Account) {
+templ Dashboard(accounts []database.IndividualKey) {
 	@Layout("Dashboard") {
 		<div class="container mx-auto py-8 px-6">
 			<div class="flex items-center justify-between mb-6">
@@ -18,7 +18,7 @@ templ Dashboard(accounts []database.Account) {
 	}
 }
 
-templ SignerDashboard(account database.Account) {
+templ SignerDashboard(account database.IndividualKey) {
 	@Layout("Signer Dashboard") {
 		<div class="container mx-auto py-8 px-6">
 			<div class="flex items-center justify-between mb-6">
