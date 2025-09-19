@@ -70,7 +70,7 @@ func (s *KeysManager) GetAccount(id string) (KeysetStore, error) {
 }
 
 type MultiAccountSigner struct {
-	keysManager        KeysManager
+	keysManager    KeysManager
 	db             database.SqliteDB
 	expirationTime time.Time
 }

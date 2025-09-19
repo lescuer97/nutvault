@@ -28,19 +28,19 @@ CREATE TABLE seeds (
 	final_expiry int8 NOT NULL,
 	CONSTRAINT seeds_pk PRIMARY KEY (id),
 	CONSTRAINT seeds_unique UNIQUE (id)
-	CONSTRAINT fk_account FOREIGN KEY (account_id) REFERENCES accounts(id)
+	CONSTRAINT fk_account FOREIGN KEY (account_id) REFERENCES keys(id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_seed_account_id ON seeds (account_id);
-CREATE INDEX IF NOT EXISTS idx_account_id ON accounts (id);
-CREATE INDEX IF NOT EXISTS idx_account_npub ON accounts (npub);
-CREATE INDEX IF NOT EXISTS idx_account_client_pubkey_fp ON accounts (client_pubkey_fp);
+CREATE INDEX IF NOT EXISTS idx_keys_id ON keys (id);
+CREATE INDEX IF NOT EXISTS idx_keys_npub ON keys (npub);
+CREATE INDEX IF NOT EXISTS idx_keys_client_pubkey_fp ON keys (client_pubkey_fp);
 -- index on auth_tokens removed
 
 -- +goose Down
 DROP TABLE IF EXISTS seeds;
-DROP TABLE IF EXISTS accounts;
+DROP TABLE IF EXISTS keys;
 DROP INDEX idx_seed_account_id;
-DROP INDEX idx_account_id;
-DROP INDEX idx_account_npub;
-DROP INDEX IF EXISTS idx_account_client_pubkey_fp;
+DROP INDEX idx_keys_id;
+DROP INDEX idx_keys_npub;
+DROP INDEX IF EXISTS idx_keys_client_pubkey_fp;
