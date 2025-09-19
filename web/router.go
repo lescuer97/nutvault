@@ -45,8 +45,20 @@ func NewRouter(serverData *ServerData) http.Handler {
 		log.Panicf("secp256k1.GeneratePrivateKey(). %+v", err)
 	}
 
-	router.Get("/login", LoginGetHandler(serverData))
+	router.Get("/login", LoginGetHandler(serverData, false))
 	router.Post("/login", LoginPostHandler(serverData, loginKey.Serialize()))
+
+	if serverData.adminNpub != nil {
+		router.Route("/admin", func(r chi.Router) {
+			r.Get("/login", LoginGetHandler(serverData, true))
+			r.Post("/login", LoginAdminPostHandler(serverData, loginKey.Serialize()))
+
+			r.Group(func(r chi.Router) {
+				r.Use(AuthAdminMiddleware(loginKey.Serialize(), serverData.adminNpub))
+				r.Get("/", DashboardHandler(serverData))
+			})
+		})
+	}
 
 	// Group routes with specific middleware
 	router.Group(func(r chi.Router) {
@@ -69,6 +81,7 @@ func NewRouter(serverData *ServerData) http.Handler {
 		// Hide endpoint to restore closed-eye button
 		r.Get("/cert/{id}/{which}/hide", HideCertHandler(serverData))
 		r.Post("/accounts/{id}/toggle-active", ToggleAccountActiveHandler(serverData))
+
 	})
 
 	return router

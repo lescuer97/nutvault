@@ -23,7 +23,14 @@ export function initLogin() {
 
     try {
       const signedEvent = await signNostrEvent(eventToSign);
-      const res = await fetch(new Request("/login", {
+
+        console.log({loginContainer})
+
+      let loginUrl = "/login"
+        if (loginContainer?.dataset?.admin) {
+            loginUrl = "/admin/login"
+        }
+      const res = await fetch(new Request(loginUrl, {
         method: "POST",
         body: JSON.stringify(signedEvent),
       }));
