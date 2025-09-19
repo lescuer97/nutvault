@@ -70,8 +70,9 @@ func (s *Signers) GetAccount(id string) (KeysetStore, error) {
 }
 
 type Signer struct {
-	signers Signers
-	db      database.SqliteDB
+	signers        Signers
+	db             database.SqliteDB
+	expirationTime time.Time
 }
 
 type SignerInfo struct {
@@ -85,6 +86,7 @@ func SetupLocalSigner(db database.SqliteDB, config Config) (*Signer, error) {
 		signers: Signers{
 			signers: make(map[string]KeysetStore),
 		},
+		expirationTime: config.ExpireTime,
 	}
 
 	slog.Info("Trying to get the Mint key")
@@ -428,7 +430,7 @@ func (l *Signer) VerifyProofs(signerInfo SignerInfo, proofs goNutsCashu.Proofs, 
 	slog.Debug("Finding what amounts we need to create private keys for")
 	signer, err := l.signers.GetAccount(signerInfo.AccountId)
 	if err != nil {
-		return  fmt.Errorf("Account does not exists")
+		return fmt.Errorf("Account does not exists")
 	}
 	// get index of amounts to use for generation
 	for _, proof := range proofs {
@@ -519,6 +521,82 @@ func (l *Signer) GetSignerPubkey(signerInfo SignerInfo) ([]byte, error) {
 		return nil, fmt.Errorf("Account does not exists")
 	}
 	return signer.pubkey.SerializeCompressed(), nil
+}
+
+func (l *Signer) AddKeysToSignerFromAccount(accountId string, derivation uint32) error {
+	slog.Info("Trying to get the Mint key")
+	bip85Master, err := l.getMasterBip85Key()
+	defer func() {
+		bip85Master = nil
+	}()
+	if err != nil {
+		return fmt.Errorf("l.getMasterBip85Key(). %w", err)
+	}
+	tx, err := l.db.Db.Begin()
+	if err != nil {
+		return fmt.Errorf("l.getMasterBip85Key(). %w", err)
+	}
+	defer tx.Rollback()
+
+	slog.Debug("Getting all account with seeds")
+	seeds, err := l.db.GetSeedsByAccountId(tx, accountId)
+	if err != nil {
+		return fmt.Errorf("signer.db.GetAccountsWithSeeds(). %w", err)
+	}
+
+	_, err = secp256k1.ParsePubKey(bip85Master.GetMasterKey().PublicKey().Key)
+	if err != nil {
+		log.Panicf("Could not get the public key for the signer master key")
+	}
+
+	derivedSignerKey, err := l.getDerivedMasterKey(bip85Master, derivation)
+	defer func() {
+		derivedSignerKey = nil
+	}()
+	if err != nil {
+		return fmt.Errorf("signer.getDerivedMasterKey(bip85Master, accountBySeeds[i].Derivation). %w", err)
+	}
+
+	if len(seeds) == 0 {
+		slog.Info("There are no seeds available. For signer", slog.String("signerId", accountId))
+		slog.Debug("Generating amounts for new seed")
+		amounts := GetAmountsFromMaxOrder(DefaultMaxOrder)
+		slog.Info("Creating a new seed")
+		newSeed, err := l.createNewSeed(derivedSignerKey, cashu.Sat, 1, 0, amounts, l.expirationTime)
+		if err != nil {
+			return fmt.Errorf("l.createNewSeed(derivedSignerKey, cashu.Sat, 1, 0, amounts, l.expirationTime). %w", err)
+		}
+		newSeed.AccountId = accountId
+		slog.Info("Saving seed for to the database")
+		err = l.db.SaveNewSeed(tx, newSeed)
+		if err != nil {
+			return fmt.Errorf("db.SaveNewSeeds([]cashu.Seed{newSeed}). %w", err)
+		}
+		err = tx.Commit()
+		if err != nil {
+			return fmt.Errorf(`tx.Commit(). %w`, err)
+		}
+
+		seeds = append(seeds, newSeed)
+	}
+	store := NewKeysetStore()
+	keysets, activeKeysets, err := GetKeysetsFromSeeds(seeds, derivedSignerKey)
+	if err != nil {
+		return fmt.Errorf(`signer.GetKeysetsFromSeeds(seeds, masterKey). %w`, err)
+	}
+	store.SetAll(keysets, activeKeysets)
+	store.SetIndexesFromSeeds(seeds)
+
+	pubkey, err := derivedSignerKey.ECPubKey()
+	if err != nil {
+		return fmt.Errorf(`derivedSignerKey.ECPubKey(). %w`, err)
+	}
+	store.SetPubkey(pubkey)
+	err = l.signers.AddAccount(accountId, store)
+	if err != nil {
+		return fmt.Errorf(`signer.signers.AddAccount(accountBySeeds[i].Id, store). %w`, err)
+	}
+	return nil
 }
 
 func verifyP2PKLockedProof(proof goNutsCashu.Proof, proofSecret nut10.WellKnownSecret) error {

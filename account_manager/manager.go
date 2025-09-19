@@ -8,11 +8,13 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"time"
 
 	"nutmix_remote_signer/database"
+	"nutmix_remote_signer/signer"
 	"nutmix_remote_signer/utils"
 
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -24,13 +26,14 @@ type Manager struct {
 	caCertPEM    []byte
 	caKeyPEM     []byte
 	tlsConfigDir string
+	signer       *signer.Signer
 }
 
 // NewManager returns a Manager and ensures the provided tlsDir exists.
 // If tlsDir is empty it defaults to $HOME/.config/nutvault/certificates.
 // The function attempts to create the directory with mode 0700 if it doesn't exist.
-func NewManager(db *database.SqliteDB, caCertPEM, caKeyPEM []byte, tlsDir string) Manager {
-	m := Manager{db: db}
+func NewManager(db *database.SqliteDB, caCertPEM, caKeyPEM []byte, tlsDir string, signer *signer.Signer) Manager {
+	m := Manager{db: db, signer: signer}
 	m.caCertPEM = caCertPEM
 	m.caKeyPEM = caKeyPEM
 
@@ -56,11 +59,6 @@ func NewManager(db *database.SqliteDB, caCertPEM, caKeyPEM []byte, tlsDir string
 	return m
 }
 
-// MakeSignerKey is a placeholder for future signer logic.
-func (m *Manager) MakeSignerKey(pubkey *btcec.PublicKey) error {
-	return nil
-}
-
 // CreateAccount creates and persists a new account using the provided pubkey.
 // npub is stored as the compressed bytes of the public key (SerializeCompressed).
 // Derivation is assigned to the next available integer (MAX(derivation)+1).
@@ -69,8 +67,14 @@ func (m *Manager) MakeSignerKey(pubkey *btcec.PublicKey) error {
 // PEM is used to compute ClientPubkeyFP which is stored on the account before saving.
 // If TLS generation fails, CreateAccount will return an error and not persist the account.
 func (m *Manager) CreateAccount(ctx context.Context, pubkey *btcec.PublicKey) (*database.Account, error) {
-	if m == nil || m.db == nil || m.db.Db == nil {
-		return nil, fmt.Errorf("manager database is not initialized")
+	if m.db == nil {
+		log.Panicf("database should not be nil")
+	}
+	if m.db.Db == nil {
+		log.Panicf("m.db.Db should not be nil")
+	}
+	if pubkey == nil {
+		log.Panic("pubkey should not have been nil at this point")
 	}
 
 	// Compute npub from compressed pubkey bytes
@@ -117,25 +121,44 @@ func (m *Manager) CreateAccount(ctx context.Context, pubkey *btcec.PublicKey) (*
 	sha := sha256.Sum256(pubPEM)
 	acc.ClientPubkeyFP = hex.EncodeToString(sha[:])
 
-	log.Printf("\n account: %+v", acc)
+	slog.Debug("Adding new account in database.", slog.String("accountId", acc.Id))
 	err = m.db.CreateAccount(&acc)
 	if err != nil {
 		return nil, fmt.Errorf("m.db.CreateAccount(&acc). %w", err)
-
 	}
+
+	slog.Debug("Generating new keys in the signer", slog.String("accountId", acc.Id))
+	err = m.signer.AddKeysToSignerFromAccount(acc.Id, acc.Derivation)
+	if err != nil {
+		return nil, fmt.Errorf("m.signer.GenerateSigningKeys(acc.Id, acc.Derivation). %w", err)
+	}
+
 	return &acc, nil
 }
 
 // UpdateAccountName updates the name of an existing account. Returns an error
 // if the manager or database is not properly initialized.
 func (m *Manager) UpdateAccountName(ctx context.Context, id string, name string) error {
-	if m == nil || m.db == nil || m.db.Db == nil {
-		return fmt.Errorf("manager database is not initialized")
+	if m.db == nil {
+		log.Panicf("database should not be nil")
+	}
+	if m.db.Db == nil {
+		log.Panicf("m.db.Db should not be nil")
 	}
 	return m.db.UpdateAccountName(id, name)
 }
 
 func (m *Manager) GetAccountsFromNpub(pubkey *secp256k1.PublicKey) ([]database.Account, error) {
+	if m.db == nil {
+		log.Panicf("database should not be nil")
+	}
+	if m.db.Db == nil {
+		log.Panicf("m.db.Db should not be nil")
+	}
+	if pubkey == nil {
+		log.Panicf("pubkey should have never been null at this point")
+	}
+
 	accounts, err := m.db.GetAccountsByNpub(pubkey.SerializeCompressed())
 	if err != nil {
 		return nil, err
@@ -211,8 +234,11 @@ func (m *Manager) TlsConfigDir() string {
 
 // GetKeysetsForAccount retrieves all keysets (seeds) for a given account ID with proper transaction handling
 func (m *Manager) GetKeysetsForAccount(ctx context.Context, accountId string) ([]database.Seed, error) {
-	if m == nil || m.db == nil || m.db.Db == nil {
-		return nil, fmt.Errorf("manager database is not initialized")
+	if m.db == nil {
+		log.Panicf("database should not be nil")
+	}
+	if m.db.Db == nil {
+		log.Panicf("m.db.Db should not be nil")
 	}
 	tx, err := m.db.Db.Begin()
 	if err != nil {
@@ -231,8 +257,11 @@ func (m *Manager) GetKeysetsForAccount(ctx context.Context, accountId string) ([
 
 // SetAccountActive sets the active status for all seeds belonging to an account
 func (m *Manager) SetAccountActive(ctx context.Context, accountID string, active bool) error {
-	if m == nil || m.db == nil || m.db.Db == nil {
-		return fmt.Errorf("manager database is not initialized")
+	if m.db == nil {
+		log.Panicf("database should not be nil")
+	}
+	if m.db.Db == nil {
+		log.Panicf("m.db.Db should not be nil")
 	}
 
 	// Update all seeds for this account
@@ -245,8 +274,11 @@ func (m *Manager) SetAccountActive(ctx context.Context, accountID string, active
 
 // GetAccountActive returns the active status for an account by checking if any of its seeds are active
 func (m *Manager) GetAccountActive(ctx context.Context, accountID string) (bool, error) {
-	if m == nil || m.db == nil || m.db.Db == nil {
-		return false, fmt.Errorf("manager database is not initialized")
+	if m.db == nil {
+		log.Panicf("database should not be nil")
+	}
+	if m.db.Db == nil {
+		log.Panicf("m.db.Db should not be nil")
 	}
 
 	// Get all seeds for this account and check if any are active

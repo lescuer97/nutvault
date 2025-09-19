@@ -151,7 +151,7 @@ func main() {
 
 	// Serve gRPC requests
 	go func() {
-		mgr := accountmanager.NewManager(&sqlite, caCertPEM, caKeyPEM, "")
+		mgr := accountmanager.NewManager(&sqlite, caCertPEM, caKeyPEM, "", signer)
 
 		slog.Info("Starting web server...", slog.String("port", abstractSocket))
 		if err := web.RunHTTPServer(":4200", &mgr); err != nil {
