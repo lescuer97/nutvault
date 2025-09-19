@@ -110,16 +110,6 @@ func SetupLocalSigner(db database.SqliteDB, config Config) (Signer, error) {
 
 	signer.signers = make(map[string]KeysetStore)
 	for i := range accountBySeeds {
-		// FIX:  verify signature of account
-		// valid, err := accountBySeeds[i].VerifySignature(signerPublicKey)
-		// if err != nil {
-		// 	log.Panicf("Something happened while trying to verify the signature of the account. %+v", err)
-		// }
-		// if !valid {
-		// 	log.Panicf("signature for account is not valid. This should never happen. %+v", err)
-		//
-		// }
-
 		derivedSignerKey, err := signer.getDerivedMasterKey(bip85Master, accountBySeeds[i].Derivation)
 		defer func() {
 			derivedSignerKey = nil
@@ -335,6 +325,7 @@ func (l *Signer) RotateKeyset(signerInfo SignerInfo, unit cashu.Unit, fee uint64
 	}
 	account.SetAll(keysets, activeKeysets)
 	account.SetIndexesFromSeeds(seeds)
+	l.signers[signerInfo.AccountId]= account
 
 	derivedSignerKey = nil
 	return func() (MintPublicKeyset, error) {
