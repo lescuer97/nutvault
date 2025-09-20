@@ -1,0 +1,28 @@
+package templates
+
+templ CreateUserDialog() {
+	<dialog open id="formDialog">
+		<form
+			hx-post="/admin/add_npub"
+			hx-trigger="submit"
+			hx-target="#formDialog"
+			hx-swap="none"
+			onhtmx:afterRequest="if (event.detail.successful) this.closest('dialog').close();"
+		>
+			<label>
+				Npub:
+				<input type="text" name="npub" required/>
+			</label>
+			<br/>
+			<br/>
+			<label>
+				Max Allowed Keys:
+				<input type="number" name="allowed_keys" required/>
+			</label>
+			<br/>
+			<br/>
+			<button type="submit">Submit</button>
+			<button type="button" onclick="this.closest('dialog').close()">Cancel</button>
+		</form>
+	</dialog>
+}

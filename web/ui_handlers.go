@@ -57,7 +57,7 @@ func DashboardHandler(serverData *ServerData) http.HandlerFunc {
 		}
 		// Attempt to load accounts from DB if present and render Dashboard
 		if serverData.manager != nil {
-			accounts, err := serverData.manager.GetAccountsFromNpub(pubkey)
+			accounts, err := serverData.manager.GetKeysFromNpub(pubkey)
 			if err == nil {
 				templates.Dashboard(accounts).Render(r.Context(), w)
 				return
@@ -76,7 +76,7 @@ func CreateKeyHandler(serverData *ServerData) http.HandlerFunc {
 			http.Error(w, "Invalid login", http.StatusUnauthorized)
 			return
 		}
-		acct, err := serverData.manager.CreateAccount(r.Context(), pubkey)
+		acct, err := serverData.manager.CreateKey(r.Context(), pubkey)
 		if err != nil {
 			slog.Error("serverData.manager.CreateAccount(r.Context(), pubkey)", slog.Any("error", err))
 			http.Error(w, "failed to create account", http.StatusInternalServerError)
@@ -96,7 +96,7 @@ func SignerDashboard(serverData *ServerData) http.HandlerFunc {
 			http.Error(w, "invalid id", http.StatusBadRequest)
 			return
 		}
-		account, err := serverData.manager.GetAccountById(id)
+		account, err := serverData.manager.GetKeyById(id)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				http.NotFound(w, r)
@@ -144,7 +144,7 @@ func UpdateAccountNameHandler(serverData *ServerData) http.HandlerFunc {
 
 		account.Name = newName
 
-		if err := serverData.manager.UpdateAccountName(r.Context(), account.Id, account.Name); err != nil {
+		if err := serverData.manager.UpdatKeyName(r.Context(), account.Id, account.Name); err != nil {
 			slog.Error("UpdateAccountName failed", slog.Any("error", err))
 			http.Error(w, "failed to update", http.StatusInternalServerError)
 			return
@@ -399,14 +399,14 @@ func ChangeSignerActivation(serverData *ServerData) http.HandlerFunc {
 			return
 		}
 
-		if err := serverData.manager.UpdateAccountName(r.Context(), account.Id, newName); err != nil {
+		if err := serverData.manager.UpdatKeyName(r.Context(), account.Id, newName); err != nil {
 			slog.Error("UpdateAccountName failed", slog.Any("error", err))
 			http.Error(w, "failed to update", http.StatusInternalServerError)
 			return
 		}
 
 		// Fetch updated account and render the whole card fragment so HTMX can swap the card
-		updatedAccount, err := serverData.manager.GetAccountById(account.Id)
+		updatedAccount, err := serverData.manager.GetKeyById(account.Id)
 		if err != nil {
 			slog.Error("GetAccountById after update failed", slog.Any("error", err))
 			http.Error(w, "failed to load account", http.StatusInternalServerError)
@@ -440,7 +440,7 @@ func ToggleAccountActiveHandler(serverData *ServerData) http.HandlerFunc {
 		account.Active = !account.Active
 
 		// Toggle the account active status
-		if err := serverData.manager.SetAccountActive(r.Context(), account.Id, account.Active); err != nil {
+		if err := serverData.manager.SetKeyActive(r.Context(), account.Id, account.Active); err != nil {
 			slog.Error("SetAccountActive", slog.Any("error", err))
 			http.Error(w, "failed to update", http.StatusInternalServerError)
 			return

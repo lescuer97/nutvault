@@ -73,8 +73,8 @@ func (s *SqliteDB) GetAllAuthorizedNpubs() ([]AuthorizedNpub, error) {
 	return authorizedNpubs, nil
 }
 
-func (s *SqliteDB) GetAuthorizedNpubByNpub(npubToCheck *secp256k1.PublicKey) (AuthorizedNpub, error) {
-	stmt, err := s.Db.Prepare("SELECT active, npub, max_keys, created_at, deativated_at FROM authorized_npubs WHERE npub = ?")
+func (s *SqliteDB) GetAuthorizedNpubByNpub(tx *sql.Tx, npubToCheck *secp256k1.PublicKey) (AuthorizedNpub, error) {
+	stmt, err := tx.Prepare("SELECT active, npub, max_keys, created_at, deativated_at FROM authorized_npubs WHERE npub = ? FOR UPDATE")
 	if err != nil {
 		return AuthorizedNpub{}, fmt.Errorf(`s.Db.Prepare("SELECT active, npub, max_keys, created_at, deativated_at FROM authorized_npubs  WHERE npub = ?"). %w`, err)
 	}
@@ -109,8 +109,8 @@ func (s *SqliteDB) GetAuthorizedNpubByNpub(npubToCheck *secp256k1.PublicKey) (Au
 	return authNpub, nil
 }
 
-func (s *SqliteDB) UpdateAuthorizedNpubActive(npub *secp256k1.PublicKey, active bool) error {
-	stmt, err := s.Db.Prepare("UPDATE keys SET active = ? WHERE id = ?")
+func (s *SqliteDB) UpdateAuthorizedNpubActive(tx *sql.Tx, npub *secp256k1.PublicKey, active bool) error {
+	stmt, err := tx.Prepare("UPDATE keys SET active = ? WHERE id = ?")
 	if err != nil {
 		return err
 	}

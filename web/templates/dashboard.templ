@@ -18,6 +18,31 @@ templ Dashboard(accounts []database.IndividualKey) {
 	}
 }
 
+templ AdminDashboard(authorizedNpubs []database.AuthorizedNpub) {
+	@Layout("Admin Dashboard") {
+		<div class="container mx-auto py-8 px-6" id="container-wrap">
+			<div class="flex items-center justify-between mb-6">
+				<h1 class="text-2xl font-bold">Accounts</h1>
+				<button
+					hx-get="/admin/add_npub_form"
+					hx-target="#container-wrap"
+					hx-swap="afterend"
+					class="rounded bg-indigo-600 text-white
+				px-4 py-2"
+				>Add Npub</button>
+			</div>
+			<div id="cards-list" class="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+				if len(authorizedNpubs) == 0 {
+					You don't have authorized NPUBs at the time
+				}
+				for _, npub := range authorizedNpubs {
+					@AuthorizedNpubCard(npub)
+				}
+			</div>
+		</div>
+	}
+}
+
 templ SignerDashboard(account database.IndividualKey) {
 	@Layout("Signer Dashboard") {
 		<div class="container mx-auto py-8 px-6">

@@ -59,14 +59,14 @@ func NewManager(db *database.SqliteDB, caCertPEM, caKeyPEM []byte, tlsDir string
 	return m
 }
 
-// CreateAccount creates and persists a new account using the provided pubkey.
+// CreateKey creates and persists a new account using the provided pubkey.
 // npub is stored as the compressed bytes of the public key (SerializeCompressed).
 // Derivation is assigned to the next available integer (MAX(derivation)+1).
 // Additionally, if CA credentials are configured on the manager, a TLS key/cert
 // is generated, saved to disk (name = account id), and the generated public key
 // PEM is used to compute ClientPubkeyFP which is stored on the account before saving.
-// If TLS generation fails, CreateAccount will return an error and not persist the account.
-func (m *Manager) CreateAccount(ctx context.Context, pubkey *btcec.PublicKey) (*database.IndividualKey, error) {
+// If TLS generation fails, CreateKey will return an error and not persist the account.
+func (m *Manager) CreateKey(ctx context.Context, pubkey *btcec.PublicKey) (*database.IndividualKey, error) {
 	if m.db == nil {
 		log.Panicf("database should not be nil")
 	}
@@ -136,9 +136,9 @@ func (m *Manager) CreateAccount(ctx context.Context, pubkey *btcec.PublicKey) (*
 	return &acc, nil
 }
 
-// UpdateAccountName updates the name of an existing account. Returns an error
+// UpdatKeyName updates the name of an existing account. Returns an error
 // if the manager or database is not properly initialized.
-func (m *Manager) UpdateAccountName(ctx context.Context, id string, name string) error {
+func (m *Manager) UpdatKeyName(ctx context.Context, id string, name string) error {
 	if m.db == nil {
 		log.Panicf("database should not be nil")
 	}
@@ -148,7 +148,7 @@ func (m *Manager) UpdateAccountName(ctx context.Context, id string, name string)
 	return m.db.UpdateAccountName(id, name)
 }
 
-func (m *Manager) GetAccountsFromNpub(pubkey *secp256k1.PublicKey) ([]database.IndividualKey, error) {
+func (m *Manager) GetKeysFromNpub(pubkey *secp256k1.PublicKey) ([]database.IndividualKey, error) {
 	if m.db == nil {
 		log.Panicf("database should not be nil")
 	}
@@ -165,8 +165,8 @@ func (m *Manager) GetAccountsFromNpub(pubkey *secp256k1.PublicKey) ([]database.I
 	}
 	return accounts, nil
 }
-func (m *Manager) GetAccountById(id string) (*database.IndividualKey, error) {
-	account, err := m.db.GetAccountById(id)
+func (m *Manager) GetKeyById(id string) (*database.IndividualKey, error) {
+	account, err := m.db.GetKeyById(id)
 	if err != nil {
 		return nil, err
 	}
@@ -255,8 +255,8 @@ func (m *Manager) GetKeysetsForAccount(ctx context.Context, accountId string) ([
 	return seeds, nil
 }
 
-// SetAccountActive sets the active status for all seeds belonging to an account
-func (m *Manager) SetAccountActive(ctx context.Context, accountID string, active bool) error {
+// SetKeyActive sets the active status for all seeds belonging to an account
+func (m *Manager) SetKeyActive(ctx context.Context, accountID string, active bool) error {
 	if m.db == nil {
 		log.Panicf("database should not be nil")
 	}
@@ -265,15 +265,15 @@ func (m *Manager) SetAccountActive(ctx context.Context, accountID string, active
 	}
 
 	// Update all seeds for this account
-	if err := m.db.UpdateAccountActive(accountID, active); err != nil {
+	if err := m.db.UpdateKeyActive(accountID, active); err != nil {
 		return fmt.Errorf("UpdateSeedsActiveStatus: %w", err)
 	}
 
 	return nil
 }
 
-// GetAccountActive returns the active status for an account by checking if any of its seeds are active
-func (m *Manager) GetAccountActive(ctx context.Context, accountID string) (bool, error) {
+// GetKeyActive returns the active status for an account by checking if any of its seeds are active
+func (m *Manager) GetKeyActive(ctx context.Context, accountID string) (bool, error) {
 	if m.db == nil {
 		log.Panicf("database should not be nil")
 	}
@@ -282,7 +282,7 @@ func (m *Manager) GetAccountActive(ctx context.Context, accountID string) (bool,
 	}
 
 	// Get all seeds for this account and check if any are active
-	account, err := m.db.GetAccountById(accountID)
+	account, err := m.db.GetKeyById(accountID)
 	if err != nil {
 		return false, fmt.Errorf("GetSeedsByAccountId: %w", err)
 	}
@@ -290,4 +290,103 @@ func (m *Manager) GetAccountActive(ctx context.Context, accountID string) (bool,
 	// Check if any seed is active
 
 	return account.Active, nil
+}
+
+func (m *Manager) GetAllAuthNpubs() ([]database.AuthorizedNpub, error) {
+	if m.db == nil {
+		log.Panicf("database should not be nil")
+	}
+	if m.db.Db == nil {
+		log.Panicf("m.db.Db should not be nil")
+	}
+
+	authNpubs, err := m.db.GetAllAuthorizedNpubs()
+	if err != nil {
+		return nil, fmt.Errorf("GetSeedsByAccountId: %w", err)
+	}
+	return authNpubs, nil
+}
+
+func (m *Manager) GetAuthNpubByNpub(ctx context.Context, npub *secp256k1.PublicKey) (database.AuthorizedNpub, error) {
+	if m.db == nil {
+		log.Panicf("database should not be nil")
+	}
+	if m.db.Db == nil {
+		log.Panicf("m.db.Db should not be nil")
+	}
+
+	tx, err := m.db.Db.Begin()
+	if err != nil {
+		return database.AuthorizedNpub{}, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+	// Get all seeds for this account and check if any are active
+	authNpub, err := m.db.GetAuthorizedNpubByNpub(tx, npub)
+	if err != nil {
+		return database.AuthorizedNpub{}, fmt.Errorf("GetSeedsByAccountId: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return database.AuthorizedNpub{}, fmt.Errorf("commit: %w", err)
+	}
+
+	return authNpub, nil
+}
+func (m *Manager) CreateAuthNpub(ctx context.Context, authNpub database.AuthorizedNpub) error {
+	if m.db == nil {
+		log.Panicf("database should not be nil")
+	}
+	if m.db.Db == nil {
+		log.Panicf("m.db.Db should not be nil")
+	}
+
+	tx, err := m.db.Db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+	// Get all seeds for this account and check if any are active
+	err = m.db.CreateAuthorizedNpub(tx, &authNpub)
+	if err != nil {
+		return fmt.Errorf("GetSeedsByAccountId: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit: %w", err)
+	}
+	return nil
+}
+func (m *Manager) ChangeAuthNpubActivation(ctx context.Context, npub *btcec.PublicKey, active bool) error {
+	if m.db == nil {
+		log.Panicf("database should not be nil")
+	}
+	if m.db.Db == nil {
+		log.Panicf("m.db.Db should not be nil")
+	}
+
+	tx, err := m.db.Db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Get all seeds for this account and check if any are active
+	authNpub, err := m.db.GetAuthorizedNpubByNpub(tx, npub)
+	if err != nil {
+		return fmt.Errorf("GetSeedsByAccountId: %w", err)
+	}
+
+	if authNpub.Npub == nil {
+		panic("npub should have never been null after getting it from the database")
+	}
+
+	// Get all seeds for this account and check if any are active
+	err = m.db.UpdateAuthorizedNpubActive(tx, authNpub.Npub, active)
+	if err != nil {
+		return fmt.Errorf("GetSeedsByAccountId: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit: %w", err)
+	}
+	return nil
 }

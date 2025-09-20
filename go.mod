@@ -37,6 +37,7 @@ require (
 	github.com/coder/websocket v1.8.14 // indirect
 	github.com/decred/dcrd/crypto/blake256 v1.1.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.10 // indirect
+	github.com/go-playground/form/v4 v4.2.1 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect

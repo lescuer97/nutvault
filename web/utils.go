@@ -31,7 +31,7 @@ func VerifyIdInRequestIsAvailable(serverData *ServerData, request *http.Request)
 	}
 
 	// Ownership verification (same pattern as other handlers)
-	account, err := serverData.manager.GetAccountById(id)
+	account, err := serverData.manager.GetKeyById(id)
 	if err != nil {
 		return nil, fmt.Errorf("serverData.manager.GetAccountById(id). %w", err)
 	}

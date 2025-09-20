@@ -48,7 +48,7 @@ func (s *SqliteDB) FlipAccountActive(id string) error {
 	return err
 }
 
-func (s *SqliteDB) GetAccountById(id string) (*IndividualKey, error) {
+func (s *SqliteDB) GetKeyById(id string) (*IndividualKey, error) {
 	row := s.Db.QueryRow("SELECT active, npub, id, name, derivation, created_at, client_pubkey_fp FROM keys WHERE id = ?", id)
 
 	var account IndividualKey
@@ -123,7 +123,7 @@ func (s *SqliteDB) UpdateAccountName(id string, name string) error {
 }
 
 // UpdateAccountName updates the name of an account identified by id.
-func (s *SqliteDB) UpdateAccountActive(id string, active bool) error {
+func (s *SqliteDB) UpdateKeyActive(id string, active bool) error {
 	stmt, err := s.Db.Prepare("UPDATE keys SET active = ? WHERE id = ?")
 	if err != nil {
 		return err

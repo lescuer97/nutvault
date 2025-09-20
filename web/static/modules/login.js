@@ -36,7 +36,11 @@ export function initLogin() {
       }));
 
       if (res.ok) {
-        window.location.href = "/";
+        if (loginContainer?.dataset?.admin) {
+            window.location.href = "/admin";
+        }else{
+            window.location.href = "/";
+        }
       } else {
         const targetHeader = res.headers.get("HX-RETARGET");
         if (window.htmx && targetHeader) {
