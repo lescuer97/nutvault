@@ -32,6 +32,7 @@ func (s *SqliteDB) CreateAuthorizedNpub(tx *sql.Tx, authNpub *AuthorizedNpub) er
 	_, err = stmt.Exec(authNpub.Active, authNpub.Npub.SerializeCompressed(), authNpub.MaxKeys, time.Now().Unix(), nil)
 	return err
 }
+
 func (s *SqliteDB) GetAllAuthorizedNpubs() ([]AuthorizedNpub, error) {
 	stmt, err := s.Db.Prepare("SELECT active, npub, max_keys, created_at, deativated_at FROM authorized_npubs")
 	if err != nil {

@@ -23,11 +23,8 @@ export function initLogin() {
 
     try {
       const signedEvent = await signNostrEvent(eventToSign);
-
-        console.log({loginContainer})
-
       let loginUrl = "/login"
-        if (loginContainer?.dataset?.admin) {
+        if (loginContainer?.dataset?.admin === 'true') {
             loginUrl = "/admin/login"
         }
       const res = await fetch(new Request(loginUrl, {
@@ -36,7 +33,7 @@ export function initLogin() {
       }));
 
       if (res.ok) {
-        if (loginContainer?.dataset?.admin) {
+        if (loginContainer?.dataset?.admin === 'true') {
             window.location.href = "/admin";
         }else{
             window.location.href = "/";

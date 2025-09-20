@@ -104,7 +104,7 @@ func LoginPostHandler(serverData *ServerData, secret []byte) http.HandlerFunc {
 		// serverData.auth.
 		// Create a new cookie
 		cookie := &http.Cookie{
-			Name:     UserAuthCookie,
+			Name:     AdminAuthKey,
 			Value:    token,
 			Path:     "/",
 			HttpOnly: true,

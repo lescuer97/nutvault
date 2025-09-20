@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"nutmix_remote_signer/database"
 	"nutmix_remote_signer/web/templates"
+	"time"
 
 	"github.com/go-playground/form/v4"
 )
@@ -38,8 +40,8 @@ func AddNpubDialogHandler() http.HandlerFunc {
 }
 
 type AddNpubForm struct {
-	Npub string `form:"npub" validate:"required"`
-	Age  int    `form:"age" validate:"required,min=0"`
+	Npub        string `form:"npub" validate:"required"`
+	AllowedKeys int    `form:"allowed_keys" validate:"required,min=0"`
 }
 
 func PostAddNpubHandler(serverData *ServerData) http.HandlerFunc {
@@ -65,8 +67,29 @@ func PostAddNpubHandler(serverData *ServerData) http.HandlerFunc {
 			http.Error(w, fmt.Sprintf("Validation error: %v", err), http.StatusBadRequest)
 			return
 		}
+		valid, err := isNostrKeyValid(formData.Npub)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Invalid nostr npub: %v", err), http.StatusBadRequest)
+			return
+		}
+		if !valid {
+			http.Error(w, fmt.Sprintf("Invalid nostr npub: %v", err), http.StatusBadRequest)
+			return
+		}
 
+		pubkey, err := ParseNip19NpubToPubkey(formData.Npub)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Invalid nostr npub: %v", err), http.StatusBadRequest)
+			return
+		}
 		// serverData.manager.
+		serverData.manager.CreateAuthNpub(database.AuthorizedNpub{
+			Active:        true,
+			MaxKeys:       uint64(formData.AllowedKeys),
+			CreatedAt:     time.Now(),
+			DeactivatedAt: nil,
+			Npub:          pubkey,
+		})
 
 		templates.CreateUserDialog().Render(r.Context(), w)
 	}

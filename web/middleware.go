@@ -11,8 +11,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-const AdminAuthKey = "admin-auth-cookie"
-const UserAuthCookie = "user-auth-cookie"
+const AdminAuthKey = "auth-cookie"
 
 type contextKey string
 
@@ -50,7 +49,7 @@ func AuthMiddleware(secret []byte) func(http.Handler) http.Handler {
 			// Clear invalid cookie
 			if err != nil || !token.Valid {
 				http.SetCookie(w, &http.Cookie{
-					Name:     UserAuthCookie,
+					Name:     AdminAuthKey,
 					Value:    "",
 					MaxAge:   -1,
 					Path:     "/",

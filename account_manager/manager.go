@@ -331,7 +331,7 @@ func (m *Manager) GetAuthNpubByNpub(ctx context.Context, npub *secp256k1.PublicK
 
 	return authNpub, nil
 }
-func (m *Manager) CreateAuthNpub(ctx context.Context, authNpub database.AuthorizedNpub) error {
+func (m *Manager) CreateAuthNpub(authNpub database.AuthorizedNpub) error {
 	if m.db == nil {
 		log.Panicf("database should not be nil")
 	}
