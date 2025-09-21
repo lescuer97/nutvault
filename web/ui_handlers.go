@@ -3,6 +3,7 @@ package web
 import (
 	"bytes"
 	"database/sql"
+	"errors"
 	"log/slog"
 	"net/http"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
 
+	accountmanager "nutmix_remote_signer/account_manager"
 	"nutmix_remote_signer/web/templates"
 )
 
@@ -45,6 +47,27 @@ func writeOpenRow(w http.ResponseWriter, r *http.Request, accountId, which, labe
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, err := w.Write(buf.Bytes())
 	return err
+}
+
+func writeHtmlNotification(info templates.NotifInfo, r *http.Request, w http.ResponseWriter) {
+	w.Header().Add("HX-Retarget", "#notifications")
+	w.Header().Add("HX-Reswap", "innerHTML")
+	templates.Notification(info).Render(r.Context(), w)
+}
+func parseErrorForMessage(err error, r *http.Request, w http.ResponseWriter) {
+	info := templates.NotifInfo{
+		Type: "error",
+		Msg:  "Something happened",
+	}
+
+	switch {
+	case errors.Is(err, accountmanager.ErrAuthorizedNpubAlreadyExists):
+		info.Msg = "NPUB already exists"
+	default:
+		slog.Error("error did not get parsed for html response.", slog.Any("error", err))
+	}
+
+	writeHtmlNotification(info, r, w)
 }
 
 // DashboardHandler renders the accounts dashboard (uses package-level DB if available)
@@ -156,9 +179,10 @@ func UpdateAccountNameHandler(serverData *ServerData) http.HandlerFunc {
 			http.Error(w, "render failed", http.StatusInternalServerError)
 			return
 		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write(buf.Bytes())
+		writeHtmlNotification(templates.NotifInfo{
+			Msg:  "Name updated correctly",
+			Type: "success",
+		}, r, w)
 	}
 }
 
@@ -419,9 +443,10 @@ func ChangeSignerActivation(serverData *ServerData) http.HandlerFunc {
 			http.Error(w, "render failed", http.StatusInternalServerError)
 			return
 		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write(buf.Bytes())
+		writeHtmlNotification(templates.NotifInfo{
+			Msg:  "Changed state of your signer correctly",
+			Type: "success",
+		}, r, w)
 	}
 }
 

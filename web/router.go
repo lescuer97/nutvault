@@ -56,7 +56,6 @@ func NewRouter(serverData *ServerData) http.Handler {
 			r.Group(func(r chi.Router) {
 				r.Use(AuthAdminMiddleware(loginKey.Serialize(), serverData.adminNpub))
 				r.Get("/", AdminDashboardHandler(serverData))
-
 				r.Get("/add_npub_form", AddNpubDialogHandler())
 				r.Post("/add_npub", PostAddNpubHandler(serverData))
 			})

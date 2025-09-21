@@ -4,8 +4,10 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
 	"log/slog"
@@ -28,6 +30,8 @@ type Manager struct {
 	tlsConfigDir string
 	signer       *signer.MultiAccountSigner
 }
+
+var ErrAuthorizedNpubAlreadyExists = errors.New("Authorized npub already exists")
 
 // NewManager returns a Manager and ensures the provided tlsDir exists.
 // If tlsDir is empty it defaults to $HOME/.config/nutvault/certificates.
@@ -329,9 +333,9 @@ func (m *Manager) GetAuthNpubByNpub(ctx context.Context, npub *secp256k1.PublicK
 		return database.AuthorizedNpub{}, fmt.Errorf("commit: %w", err)
 	}
 
-	return authNpub, nil
+	return *authNpub, nil
 }
-func (m *Manager) CreateAuthNpub(authNpub database.AuthorizedNpub) error {
+func (m *Manager) CreateAuthNpub(npubToAdd database.AuthorizedNpub) error {
 	if m.db == nil {
 		log.Panicf("database should not be nil")
 	}
@@ -344,9 +348,22 @@ func (m *Manager) CreateAuthNpub(authNpub database.AuthorizedNpub) error {
 		return fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback()
-	// Get all seeds for this account and check if any are active
-	err = m.db.CreateAuthorizedNpub(tx, &authNpub)
+
+	authNpub, err := m.db.GetAuthorizedNpubByNpub(tx, npubToAdd.Npub)
 	if err != nil {
+		// INFO: we ignore this error because we want an npub that doesn't exists
+		if !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("GetSeedsByAccountId: %w", err)
+		}
+	}
+
+	if authNpub != nil {
+		return fmt.Errorf("user already exists. %w", ErrAuthorizedNpubAlreadyExists)
+	}
+
+	err = m.db.CreateAuthorizedNpub(tx, &npubToAdd)
+	if err != nil {
+		log.Printf("m.db.CreateAuthorizedNpub(tx, &authNpub). %+v", err)
 		return fmt.Errorf("GetSeedsByAccountId: %w", err)
 	}
 
@@ -370,17 +387,17 @@ func (m *Manager) ChangeAuthNpubActivation(ctx context.Context, npub *btcec.Publ
 	defer tx.Rollback()
 
 	// Get all seeds for this account and check if any are active
-	authNpub, err := m.db.GetAuthorizedNpubByNpub(tx, npub)
+	npubToAdd, err := m.db.GetAuthorizedNpubByNpub(tx, npub)
 	if err != nil {
 		return fmt.Errorf("GetSeedsByAccountId: %w", err)
 	}
 
-	if authNpub.Npub == nil {
+	if npubToAdd.Npub == nil {
 		panic("npub should have never been null after getting it from the database")
 	}
 
 	// Get all seeds for this account and check if any are active
-	err = m.db.UpdateAuthorizedNpubActive(tx, authNpub.Npub, active)
+	err = m.db.UpdateAuthorizedNpubActive(tx, npubToAdd.Npub, active)
 	if err != nil {
 		return fmt.Errorf("GetSeedsByAccountId: %w", err)
 	}

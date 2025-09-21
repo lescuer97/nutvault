@@ -74,10 +74,10 @@ func (s *SqliteDB) GetAllAuthorizedNpubs() ([]AuthorizedNpub, error) {
 	return authorizedNpubs, nil
 }
 
-func (s *SqliteDB) GetAuthorizedNpubByNpub(tx *sql.Tx, npubToCheck *secp256k1.PublicKey) (AuthorizedNpub, error) {
-	stmt, err := tx.Prepare("SELECT active, npub, max_keys, created_at, deativated_at FROM authorized_npubs WHERE npub = ? FOR UPDATE")
+func (s *SqliteDB) GetAuthorizedNpubByNpub(tx *sql.Tx, npubToCheck *secp256k1.PublicKey) (*AuthorizedNpub, error) {
+	stmt, err := tx.Prepare("SELECT active, npub, max_keys, created_at, deativated_at FROM authorized_npubs WHERE npub = ?")
 	if err != nil {
-		return AuthorizedNpub{}, fmt.Errorf(`s.Db.Prepare("SELECT active, npub, max_keys, created_at, deativated_at FROM authorized_npubs  WHERE npub = ?"). %w`, err)
+		return nil, fmt.Errorf(`s.Db.Prepare("SELECT active, npub, max_keys, created_at, deativated_at FROM authorized_npubs  WHERE npub = ?"). %w`, err)
 	}
 	defer stmt.Close()
 
@@ -89,7 +89,7 @@ func (s *SqliteDB) GetAuthorizedNpubByNpub(tx *sql.Tx, npubToCheck *secp256k1.Pu
 	var npub []byte
 	err = row.Scan(&authNpub.Active, &npub, &authNpub.MaxKeys, &created_at, &deleted_at)
 	if err != nil {
-		return AuthorizedNpub{}, err
+		return nil, err
 	}
 	authNpub.CreatedAt = time.Unix(int64(created_at), 0)
 	if deleted_at != nil {
@@ -99,7 +99,7 @@ func (s *SqliteDB) GetAuthorizedNpubByNpub(tx *sql.Tx, npubToCheck *secp256k1.Pu
 
 	pubkey, err := btcec.ParsePubKey(npub)
 	if err != nil {
-		return AuthorizedNpub{}, fmt.Errorf(`btcec.ParsePubKey(npub). %w`, err)
+		return nil, fmt.Errorf(`btcec.ParsePubKey(npub). %w`, err)
 	}
 
 	if len(npub) == 0 || npub == nil {
@@ -107,7 +107,7 @@ func (s *SqliteDB) GetAuthorizedNpubByNpub(tx *sql.Tx, npubToCheck *secp256k1.Pu
 	}
 	authNpub.Npub = pubkey
 
-	return authNpub, nil
+	return &authNpub, nil
 }
 
 func (s *SqliteDB) UpdateAuthorizedNpubActive(tx *sql.Tx, npub *secp256k1.PublicKey, active bool) error {

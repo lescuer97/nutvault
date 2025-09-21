@@ -79,18 +79,24 @@ func PostAddNpubHandler(serverData *ServerData) http.HandlerFunc {
 
 		pubkey, err := ParseNip19NpubToPubkey(formData.Npub)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Invalid nostr npub: %v", err), http.StatusBadRequest)
+			parseErrorForMessage(err, r, w)
 			return
 		}
-		// serverData.manager.
-		serverData.manager.CreateAuthNpub(database.AuthorizedNpub{
+		err = serverData.manager.CreateAuthNpub(database.AuthorizedNpub{
 			Active:        true,
 			MaxKeys:       uint64(formData.AllowedKeys),
 			CreatedAt:     time.Now(),
 			DeactivatedAt: nil,
 			Npub:          pubkey,
 		})
+		if err != nil {
+			parseErrorForMessage(err, r, w)
+			return
+		}
 
-		templates.CreateUserDialog().Render(r.Context(), w)
+		writeHtmlNotification(templates.NotifInfo{
+			Msg:  "New user generated",
+			Type: "success",
+		}, r, w)
 	}
 }

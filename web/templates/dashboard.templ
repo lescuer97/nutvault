@@ -24,9 +24,11 @@ templ AdminDashboard(authorizedNpubs []database.AuthorizedNpub) {
 			<div class="flex items-center justify-between mb-6">
 				<h1 class="text-2xl font-bold">Accounts</h1>
 				<button
+					credentials="include"
 					hx-get="/admin/add_npub_form"
-					hx-target="#container-wrap"
-					hx-swap="afterend"
+					hx-target="#modals"
+					hx-swap="innerHTML"
+					preload
 					class="rounded bg-indigo-600 text-white
 				px-4 py-2"
 				>Add Npub</button>
