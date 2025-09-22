@@ -63,7 +63,7 @@ func (s *SqliteDB) GetAllAuthorizedNpubs() ([]AuthorizedNpub, error) {
 		}
 		pubkey, err := btcec.ParsePubKey(npub)
 		if err != nil {
-			return nil, fmt.Errorf(`btcec.ParsePubKey(npub). %w`, err)
+			return nil, fmt.Errorf(`schnorr.ParsePubKey(npub). %w`, err)
 		}
 		if len(npub) == 0 || npub == nil {
 			log.Panicf("npub should have never been null at this point")
@@ -99,7 +99,7 @@ func (s *SqliteDB) GetAuthorizedNpubByNpub(tx *sql.Tx, npubToCheck *secp256k1.Pu
 
 	pubkey, err := btcec.ParsePubKey(npub)
 	if err != nil {
-		return nil, fmt.Errorf(`btcec.ParsePubKey(npub). %w`, err)
+		return nil, fmt.Errorf(`schnorr.ParsePubKey(npub). %w`, err)
 	}
 
 	if len(npub) == 0 || npub == nil {
@@ -119,4 +119,14 @@ func (s *SqliteDB) UpdateAuthorizedNpubActive(tx *sql.Tx, npub *secp256k1.Public
 
 	_, err = stmt.Exec(active, npub.SerializeCompressed())
 	return err
+}
+
+func (s *SqliteDB) CountOfKeysFromNpub(tx *sql.Tx, npub *secp256k1.PublicKey) (int, error) {
+	var rowCount int
+	err := tx.QueryRow(`SELECT COUNT(*) FROM keys WHERE npub = ?`, npub.SerializeCompressed()).Scan(&rowCount)
+	if err != nil {
+		return 0, err
+	}
+
+	return rowCount, nil
 }

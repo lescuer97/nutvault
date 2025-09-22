@@ -40,7 +40,7 @@ func VerifyIdInRequestIsAvailable(serverData *ServerData, request *http.Request)
 	if err != nil {
 		return nil, fmt.Errorf("GetAudience(request). %w", err)
 	}
-	if !bytes.Equal(audPub.SerializeCompressed(), account.Npub) {
+	if !bytes.Equal(audPub.SerializeCompressed(), account.Npub.SerializeCompressed()) {
 		return nil, ErrNpubDoesNotOwnSignerId
 	}
 

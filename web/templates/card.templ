@@ -19,7 +19,7 @@ templ KeyCard(acct database.IndividualKey) {
 		</div>
 		<div class="mt-3 text-sm font-mono break-words break-all max-w-full whitespace-normal overflow-hidden">
 			<div class="text-sm font-semibold"><span class="text-slate-700 font-medium">NPUB:</span></div>
-			<div class="text-xs text-slate-500 mt-1">{ hex.EncodeToString(acct.Npub) }</div>
+			<div class="text-xs text-slate-500 mt-1">{ hex.EncodeToString(acct.Npub.SerializeCompressed()) }</div>
 		</div>
 		<div class="mt-4">
 			<a
@@ -53,7 +53,7 @@ templ KeyCardNoButton(acct database.IndividualKey) {
 		</div>
 		<div class="mt-3 text-sm font-mono break-words break-all max-w-full whitespace-normal overflow-hidden">
 			<div class="text-sm font-semibold"><span class="text-slate-700 font-medium">NPUB:</span></div>
-			<div class="text-xs text-slate-500 mt-1">{ hex.EncodeToString(acct.Npub) }</div>
+			<div class="text-xs text-slate-500 mt-1">{ hex.EncodeToString(acct.Npub.SerializeCompressed()) }</div>
 		</div>
 	</div>
 }

@@ -25,7 +25,7 @@ func AdminDashboardHandler(serverData *ServerData) http.HandlerFunc {
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 			} else {
-				http.NotFound(w, r)
+				parseErrorForMessage(err, r, w)
 				return
 			}
 		}

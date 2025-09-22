@@ -6,15 +6,17 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/fxamacker/cbor/v2"
 )
 
 type IndividualKey struct {
-	Active         bool   `json:"active" cbor:"active"`
-	Npub           []byte `json:"npub"   cbor:"npub"`
-	Id             string `json:"id"     cbor:"id"`
-	Name           string `json:"name"   cbor:"name" db:"name"`
-	ClientPubkeyFP string `json:"client_pubkey_fp" db:"client_pubkey_fp" cbor:"client_pubkey_fp"`
+	Active         bool                 `json:"active" cbor:"active"`
+	Npub           *secp256k1.PublicKey `json:"npub"   cbor:"npub"`
+	Id             string               `json:"id"     cbor:"id"`
+	Name           string               `json:"name"   cbor:"name" db:"name"`
+	ClientPubkeyFP string               `json:"client_pubkey_fp" db:"client_pubkey_fp" cbor:"client_pubkey_fp"`
 	// NOTE: derivation = sha256sum(npub + id)
 	Derivation uint32 `json:"derivation" cbor:"derivation"`
 	CreatedAt  int64  `json:"created_at" cbor:"created_at"`
@@ -26,14 +28,14 @@ type IndividualKey struct {
 // is implemented correctly. See TODO/FIXME comments in the original
 // implementation.
 
-func (s *SqliteDB) CreateAccount(account *IndividualKey) error {
-	stmt, err := s.Db.Prepare("INSERT INTO keys (active, npub, id, name, derivation, created_at, client_pubkey_fp) VALUES (?, ?, ?, ?, ?, ?, ?)")
+func (s *SqliteDB) CreateAccount(tx *sql.Tx, account *IndividualKey) error {
+	stmt, err := tx.Prepare("INSERT INTO keys (active, npub, id, name, derivation, created_at, client_pubkey_fp) VALUES (?, ?, ?, ?, ?, ?, ?)")
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
 
-	_, err = stmt.Exec(account.Active, account.Npub, account.Id, account.Name, account.Derivation, time.Now().Unix(), account.ClientPubkeyFP)
+	_, err = stmt.Exec(account.Active, account.Npub.SerializeCompressed(), account.Id, account.Name, account.Derivation, time.Now().Unix(), account.ClientPubkeyFP)
 	return err
 }
 
@@ -76,10 +78,16 @@ func (s *SqliteDB) GetAccountsByNpub(npub []byte) ([]IndividualKey, error) {
 
 	for rows.Next() {
 		var account IndividualKey
-		err := rows.Scan(&account.Active, &account.Npub, &account.Id, &account.Name, &account.Derivation, &account.CreatedAt, &account.ClientPubkeyFP)
+		var npubSql []byte
+		err := rows.Scan(&account.Active, &npubSql, &account.Id, &account.Name, &account.Derivation, &account.CreatedAt, &account.ClientPubkeyFP)
 		if err != nil {
 			return nil, err
 		}
+		pubkey, err := btcec.ParsePubKey(npub)
+		if err != nil {
+			return nil, fmt.Errorf(`btcec.ParsePubKey(npub). %w`, err)
+		}
+		account.Npub = pubkey
 
 		accounts = append(accounts, account)
 	}
@@ -90,10 +98,16 @@ func (s *SqliteDB) GetAccountByNpub(npub []byte) (*IndividualKey, error) {
 	row := s.Db.QueryRow("SELECT active, npub, id, name, derivation, created_at, client_pubkey_fp FROM keys WHERE npub = ?", npub)
 
 	var account IndividualKey
-	err := row.Scan(&account.Active, &account.Npub, &account.Id, &account.Name, &account.Derivation, &account.CreatedAt, &account.ClientPubkeyFP)
+	var npubSql []byte
+	err := row.Scan(&account.Active, &npubSql, &account.Id, &account.Name, &account.Derivation, &account.CreatedAt, &account.ClientPubkeyFP)
 	if err != nil {
 		return nil, err
 	}
+	pubkey, err := btcec.ParsePubKey(npub)
+	if err != nil {
+		return nil, fmt.Errorf(`btcec.ParsePubKey(npub). %w`, err)
+	}
+	account.Npub = pubkey
 
 	return &account, nil
 }
@@ -102,10 +116,16 @@ func (s *SqliteDB) GetAccountByClientPubkeyFP(ctx context.Context, fp string) (I
 	row := s.Db.QueryRow("SELECT active, npub, id, name, derivation, created_at, client_pubkey_fp FROM keys WHERE client_pubkey_fp = ?", fp)
 
 	var account IndividualKey
-	err := row.Scan(&account.Active, &account.Npub, &account.Id, &account.Name, &account.Derivation, &account.CreatedAt, &account.ClientPubkeyFP)
+	var npub []byte
+	err := row.Scan(&account.Active, &npub, &account.Id, &account.Name, &account.Derivation, &account.CreatedAt, &account.ClientPubkeyFP)
 	if err != nil {
 		return IndividualKey{}, err
 	}
+	pubkey, err := btcec.ParsePubKey(npub)
+	if err != nil {
+		return IndividualKey{}, fmt.Errorf(`btcec.ParsePubKey(npub). %w`, err)
+	}
+	account.Npub = pubkey
 
 	return account, nil
 }
@@ -164,14 +184,21 @@ func (s *SqliteDB) GetAccountsWithSeeds() ([]AccountWithSeeds, error) {
 		var seedUnit, seedId, seedAmounts, seedAccountId sql.NullString
 		var seedCreatedAt, seedInputFeePpk, seedVersion sql.NullInt64
 		var seedLegacy sql.NullBool
+		var npub []byte
 		err := rows.Scan(
-			&account.Active, &account.Npub, &account.Id, &account.Name, &account.Derivation, &account.CreatedAt,
+			&account.Active, &npub, &account.Id, &account.Name, &account.Derivation, &account.CreatedAt,
 			&seedActive, &seedUnit, &seedId, &seedCreatedAt, &seedInputFeePpk, &seedVersion, &seedLegacy, &seedAmounts, &seedAccountId,
 		)
 		if err != nil {
 			return nil, err
 		}
 
+		pubkey, err := btcec.ParsePubKey(npub)
+		if err != nil {
+			return nil, fmt.Errorf(`btcec.ParsePubKey(npub). %w`, err)
+		}
+
+		account.Npub = pubkey
 		if _, ok := accountsMap[account.Id]; !ok {
 			accountsMap[account.Id] = &AccountWithSeeds{
 				IndividualKey: &account,

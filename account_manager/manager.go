@@ -31,7 +31,10 @@ type Manager struct {
 	signer       *signer.MultiAccountSigner
 }
 
-var ErrAuthorizedNpubAlreadyExists = errors.New("Authorized npub already exists")
+var (
+	ErrAuthorizedNpubAlreadyExists = errors.New("Authorized npub already exists")
+	ErrKeysLimitExceded            = errors.New("You can't add any more keys to your profile")
+)
 
 // NewManager returns a Manager and ensures the provided tlsDir exists.
 // If tlsDir is empty it defaults to $HOME/.config/nutvault/certificates.
@@ -81,9 +84,6 @@ func (m *Manager) CreateKey(ctx context.Context, pubkey *btcec.PublicKey) (*data
 		log.Panic("pubkey should not have been nil at this point")
 	}
 
-	// Compute npub from compressed pubkey bytes
-	npub := pubkey.SerializeCompressed()
-
 	// Generate a random ID (32 bytes hex)
 	idBytes := make([]byte, 32)
 	if _, err := rand.Read(idBytes); err != nil {
@@ -97,7 +97,7 @@ func (m *Manager) CreateKey(ctx context.Context, pubkey *btcec.PublicKey) (*data
 
 	acc := database.IndividualKey{
 		Active:     true,
-		Npub:       npub,
+		Npub:       pubkey,
 		Id:         id,
 		Derivation: derivationInt,
 		CreatedAt:  time.Now().Unix(),
@@ -124,11 +124,32 @@ func (m *Manager) CreateKey(ctx context.Context, pubkey *btcec.PublicKey) (*data
 	}
 	sha := sha256.Sum256(pubPEM)
 	acc.ClientPubkeyFP = hex.EncodeToString(sha[:])
-
 	slog.Debug("Adding new account in database.", slog.String("accountId", acc.Id))
-	err = m.db.CreateAccount(&acc)
+	tx, err := m.db.Db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	authNpub, err := m.db.GetAuthorizedNpubByNpub(tx, acc.Npub)
+	if err != nil {
+		return nil, fmt.Errorf("m.db.GetAuthorizedNpubByNpub(tx, acc.Npub). %w", err)
+	}
+
+	count, err := m.db.CountOfKeysFromNpub(tx, authNpub.Npub)
+	if err != nil {
+		return nil, fmt.Errorf("m.db.CountOfKeysFromNpub(tx, acc.Npub). %w", err)
+	}
+
+	if int(authNpub.MaxKeys) < count+1 {
+		return nil, ErrKeysLimitExceded
+	}
+	err = m.db.CreateAccount(tx, &acc)
 	if err != nil {
 		return nil, fmt.Errorf("m.db.CreateAccount(&acc). %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit: %w", err)
 	}
 
 	slog.Debug("Generating new keys in the signer", slog.String("accountId", acc.Id))

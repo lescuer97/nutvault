@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql"
 	"errors"
+	"log"
 	"log/slog"
 	"net/http"
 	"os"
@@ -63,6 +64,8 @@ func parseErrorForMessage(err error, r *http.Request, w http.ResponseWriter) {
 	switch {
 	case errors.Is(err, accountmanager.ErrAuthorizedNpubAlreadyExists):
 		info.Msg = "NPUB already exists"
+	case errors.Is(err, accountmanager.ErrKeysLimitExceded):
+		info.Msg = "You have exceeded the amount of keys allowed in your account"
 	default:
 		slog.Error("error did not get parsed for html response.", slog.Any("error", err))
 	}
@@ -99,15 +102,15 @@ func CreateKeyHandler(serverData *ServerData) http.HandlerFunc {
 			http.Error(w, "Invalid login", http.StatusUnauthorized)
 			return
 		}
+		log.Printf("before create key")
 		acct, err := serverData.manager.CreateKey(r.Context(), pubkey)
 		if err != nil {
 			slog.Error("serverData.manager.CreateAccount(r.Context(), pubkey)", slog.Any("error", err))
-			http.Error(w, "failed to create account", http.StatusInternalServerError)
+			parseErrorForMessage(err, r, w)
 			return
 		}
 
 		templates.KeyCard(*acct).Render(r.Context(), w)
-		return
 	}
 }
 
@@ -213,7 +216,7 @@ func CertHandler(serverData *ServerData) http.HandlerFunc {
 			http.Error(w, "invalid audience", http.StatusUnauthorized)
 			return
 		}
-		if !bytes.Equal(audPub.SerializeCompressed(), account.Npub) {
+		if !bytes.Equal(audPub.SerializeCompressed(), account.Npub.SerializeCompressed()) {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
