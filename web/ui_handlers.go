@@ -128,7 +128,7 @@ func SignerDashboard(serverData *ServerData) http.HandlerFunc {
 				http.NotFound(w, r)
 				return
 			}
-			slog.Error("GetAccountById", slog.Any("error", err))
+			slog.Error("GetKeyById(id)", slog.Any("error", err))
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}

@@ -54,10 +54,16 @@ func (s *SqliteDB) GetKeyById(id string) (*IndividualKey, error) {
 	row := s.Db.QueryRow("SELECT active, npub, id, name, derivation, created_at, client_pubkey_fp FROM keys WHERE id = ?", id)
 
 	var account IndividualKey
-	err := row.Scan(&account.Active, &account.Npub, &account.Id, &account.Name, &account.Derivation, &account.CreatedAt, &account.ClientPubkeyFP)
+	var npubSql []byte
+	err := row.Scan(&account.Active, &npubSql, &account.Id, &account.Name, &account.Derivation, &account.CreatedAt, &account.ClientPubkeyFP)
 	if err != nil {
 		return nil, err
 	}
+	pubkey, err := btcec.ParsePubKey(npubSql)
+	if err != nil {
+		return nil, fmt.Errorf(`btcec.ParsePubKey(npub). %w`, err)
+	}
+	account.Npub = pubkey
 
 	return &account, nil
 }
