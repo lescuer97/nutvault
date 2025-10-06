@@ -8,7 +8,7 @@ CREATE TABLE "seeds" (
 	version int NOT NULL,
 	legacy bool NOT NULL DEFAULT FALSE,
 	amounts TEXT NOT NULL,
-	final_expiry TEXT NOT NULL,
+	final_expiry int8,
 	CONSTRAINT seeds_pk PRIMARY KEY (id),
 	CONSTRAINT seeds_unique UNIQUE (id)
 );

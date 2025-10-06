@@ -59,19 +59,21 @@ func main() {
 	defer sqlite.Db.Close()
 
 	// get expirty time from env var if not use default
-	expiryTime := time.Now()
+	var expiryTime *time.Time
+	nowTime := time.Now()
 	expiryHoursEnvStr := os.Getenv("KEYSET_EXPIRY_HOURS")
 	if expiryHoursEnvStr != "" {
 		expiryHoursEnv, err := strconv.ParseUint(expiryHoursEnvStr, 10, 64)
 		if err != nil {
 			slog.Warn("KEYSET_EXPIRY_HOURS is not set correctly. Using default of 720 hours.")
-			expiryTime = expiryTime.Add(720 * time.Hour)
+			nowTime = nowTime.Add(720 * time.Hour)
+			expiryTime = &nowTime
 		} else {
-			expiryTime = expiryTime.Add(time.Duration(expiryHoursEnv) * time.Hour)
+			nowTime = nowTime.Add(time.Duration(expiryHoursEnv) * time.Hour)
+			expiryTime = &nowTime
 		}
-	} else {
-		expiryTime = expiryTime.Add(720 * time.Hour)
 	}
+
 	autoRotate, err := strconv.ParseBool(os.Getenv("AUTO_ROTATE"))
 	if err != nil {
 		autoRotate = false

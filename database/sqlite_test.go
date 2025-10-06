@@ -9,15 +9,14 @@ import (
 )
 
 func TestSeedRotation(t *testing.T) {
-
 	dir := t.TempDir()
 	ctx := context.Background()
 
 	sqlite, err := DatabaseSetup(ctx, dir)
-	defer sqlite.Db.Close()
 	if err != nil {
 		t.Fatalf(`database.DatabaseSetup(ctx, "migrations"). %+v`, err)
 	}
+	defer sqlite.Db.Close()
 
 	seed := Seed{
 		Active:      true,
@@ -84,15 +83,14 @@ func TestSeedRotation(t *testing.T) {
 
 }
 func TestSeedRotation2(t *testing.T) {
-
 	dir := t.TempDir()
 	ctx := context.Background()
 
 	sqlite, err := DatabaseSetup(ctx, dir)
-	defer sqlite.Db.Close()
 	if err != nil {
 		t.Fatalf(`database.DatabaseSetup(ctx, "migrations"). %+v`, err)
 	}
+	defer sqlite.Db.Close()
 
 	seeds, err := sqlite.GetAllSeeds()
 	if err != nil {

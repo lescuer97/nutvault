@@ -23,7 +23,8 @@ type MintPublicKeyset struct {
 	InputFeePpk       uint
 	Legacy            bool
 	Version           uint64
-	FinalExpiry       time.Time
+	FinalExpiry       *time.Time
+	Amounts []uint64
 }
 type MintKeyset struct {
 	Id                []byte
@@ -33,7 +34,8 @@ type MintKeyset struct {
 	Keys              map[uint64]crypto.KeyPair
 	InputFeePpk       uint
 	Version           uint64
-	FinalExpiry       time.Time
+	FinalExpiry       *time.Time
+	Amounts []uint64
 }
 
 func MakeMintPublickeys(mintKey MintKeyset) MintPublicKeyset {
@@ -46,6 +48,7 @@ func MakeMintPublickeys(mintKey MintKeyset) MintPublicKeyset {
 		InputFeePpk:       uint(mintKey.InputFeePpk),
 		Version:           mintKey.Version,
 		FinalExpiry:       mintKey.FinalExpiry,
+		Amounts: mintKey.Amounts,
 	}
 
 	for key, keypair := range mintKey.Keys {

@@ -140,12 +140,14 @@ func (s *Server) RotateKeyset(ctx context.Context, req *sig.RotationRequest) (*s
 	}
 
 	// Convert FinalExpiry unix timestamp to time.Time. If 0, use default of 270 hours and log a warning.
-	var expiryTime time.Time
-	if rotationReq.FinalExpiry == 0 {
-		expiryTime = time.Now().Add(270 * time.Hour)
+	var expiryTime *time.Time
+	if rotationReq.FinalExpiry == nil {
+		expTime := time.Now().Add(270 * time.Hour)
+		expiryTime = &expTime
 		slog.Warn("RotationRequest did not include final_expiry; using default of 270 hours")
 	} else {
-		expiryTime = time.Unix(int64(rotationReq.FinalExpiry), 0)
+		expTime := time.Unix(int64(*rotationReq.FinalExpiry), 0)
+		expiryTime = &expTime
 	}
 
 	newKey, err := s.Signer.RotateKeyset(rotationReq.Unit, rotationReq.Fee, rotationReq.Amounts, expiryTime)

@@ -10,6 +10,8 @@ import (
 	"math"
 	"nutmix_remote_signer/database"
 	"sort"
+	"strconv"
+	"time"
 
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -17,16 +19,78 @@ import (
 	"github.com/lescuer97/nutmix/api/cashu"
 )
 
-func DeriveKeyset(mintKey *hdkeychain.ExtendedKey, seed database.Seed, amounts []uint64) (MintKeyset, error) {
+func DeriveKeysetId(keysets []*secp256k1.PublicKey) (string, error) {
+	concatBinaryArray := []byte{}
+	for _, pubkey := range keysets {
+		if pubkey == nil {
+			panic("pubkey should have never been nil at this time")
+		}
+		concatBinaryArray = append(concatBinaryArray, pubkey.SerializeCompressed()...)
+	}
+	hashedKeysetId := sha256.Sum256(concatBinaryArray)
+	hex := hex.EncodeToString(hashedKeysetId[:])
+
+	return "00" + hex[:14], nil
+}
+
+func DeriveKeysetIdV2(pubKeysArray []*secp256k1.PublicKey, unit string, finalExpiry *time.Time) string {
+	var keysetIDBytes []byte
+
+	for _, key := range pubKeysArray {
+		if key == nil {
+			panic("pubkey should have never been nil at this time")
+		}
+		keysetIDBytes = append(keysetIDBytes, key.SerializeCompressed()...)
+	}
+
+	keysetIDBytes = append(keysetIDBytes, []byte("unit:"+unit)...)
+	if finalExpiry != nil {
+		keysetIDBytes = append(keysetIDBytes, []byte("final_expiry:"+strconv.Itoa(int(finalExpiry.Unix())))...)
+	}
+	hash := sha256.Sum256(keysetIDBytes)
+	return "01" + hex.EncodeToString(hash[:])
+}
+
+func convertPubkeysMapToOrderArray(raw map[uint64]*secp256k1.PublicKey) []*secp256k1.PublicKey {
+	arrays := []struct {
+		Amount uint64
+		Pubkey *secp256k1.PublicKey
+	}{}
+	for amount, pubkey := range raw {
+
+		arrays = append(arrays, struct {
+			Amount uint64
+			Pubkey *secp256k1.PublicKey
+		}{
+			Amount: amount,
+			Pubkey: pubkey,
+		})
+
+	}
+
+	sort.Slice(arrays, func(i, j int) bool {
+		return arrays[i].Amount < arrays[j].Amount
+	})
+
+	justPubkeys := []*secp256k1.PublicKey{}
+
+	for i := range arrays {
+		justPubkeys = append(justPubkeys, arrays[i].Pubkey)
+	}
+
+	return justPubkeys
+}
+
+func DeriveKeyset(mintKey *hdkeychain.ExtendedKey, seed database.Seed) (MintKeyset, error) {
 	keyset := MintKeyset{
 		Unit:              seed.Unit,
 		InputFeePpk:       seed.InputFeePpk,
 		Active:            seed.Active,
 		DerivationPathIdx: uint32(seed.Version),
 		Keys:              make(map[uint64]crypto.KeyPair),
-
-		Version:     seed.Version,
-		FinalExpiry: seed.FinalExpiry,
+		Amounts:           seed.Amounts,
+		Version:           seed.Version,
+		FinalExpiry:       seed.FinalExpiry,
 	}
 
 	slog.Debug("converting unit to cashu unit", slog.String("unit", seed.Unit))
@@ -35,7 +99,7 @@ func DeriveKeyset(mintKey *hdkeychain.ExtendedKey, seed database.Seed, amounts [
 		return keyset, fmt.Errorf("UnitFromString(seed.Unit) %w", err)
 	}
 
-	amountsMap := OrderAndTransformAmounts(amounts)
+	amountsMap := OrderAndTransformAmounts(seed.Amounts)
 	if unit == cashu.AUTH {
 		newMap := make(KeysetAmounts)
 		newMap[1] = 0
@@ -43,13 +107,13 @@ func DeriveKeyset(mintKey *hdkeychain.ExtendedKey, seed database.Seed, amounts [
 	}
 
 	if seed.Legacy {
-		slog.Info("Generating Legacy keys", slog.String("keyId", seed.Id), slog.String("amount", fmt.Sprintf("%v", amounts)))
+		slog.Info("Generating Legacy keys", slog.String("keyId", seed.Id), slog.String("amount", fmt.Sprintf("%v", seed.Amounts)))
 		err := LegacyKeyDerivation(mintKey, &keyset, seed, unit, amountsMap)
 		if err != nil {
 			return keyset, fmt.Errorf("LegacyKeyDerivation(mintKey,&keyset, seed, unit ) %w", err)
 		}
 	} else {
-		slog.Info("Genating keys.", slog.String("keyId", seed.Id), slog.String("amount", fmt.Sprintf("%v", amounts)))
+		slog.Info("Genating keys.", slog.String("keyId", seed.Id), slog.String("amount", fmt.Sprintf("%v", seed.Amounts)))
 		err := KeyDerivation(mintKey, &keyset, seed, unit, amountsMap)
 		if err != nil {
 			return keyset, fmt.Errorf("KeyDerivation(mintKey,&keyset, seed, unit) %w", err)
@@ -61,7 +125,27 @@ func DeriveKeyset(mintKey *hdkeychain.ExtendedKey, seed database.Seed, amounts [
 		publicKeys[i] = val.PublicKey
 	}
 
-	id := crypto.DeriveKeysetId(publicKeys)
+	publicKeysList := convertPubkeysMapToOrderArray(publicKeys)
+	// INFO: if the seed id doesn't exists we generate it. we check the version byte and generate
+	id := ""
+	if len(seed.Id) == 0 {
+		id, err = DeriveKeysetId(publicKeysList)
+		if err != nil {
+			return keyset, fmt.Errorf("DeriveKeysetId(publicKeysList) %w", err)
+		}
+	} else {
+		switch seed.Id[:2] {
+		case "00":
+			id, err = DeriveKeysetId(publicKeysList)
+			if err != nil {
+				return keyset, fmt.Errorf("DeriveKeysetId(publicKeysList) %w", err)
+			}
+		case "01":
+			id = DeriveKeysetIdV2(publicKeysList, seed.Unit, seed.FinalExpiry)
+
+		}
+	}
+
 	idBytes, err := hex.DecodeString(id)
 	if err != nil {
 		return keyset, fmt.Errorf("hex.DecodeString(id) %w", err)
@@ -171,7 +255,7 @@ func GetKeysetsFromSeeds(seeds []database.Seed, mintKey *hdkeychain.ExtendedKey)
 	newActiveKeysets := make(map[string]MintPublicKeyset)
 
 	for _, seed := range seeds {
-		keyset, err := DeriveKeyset(mintKey, seed, seed.Amounts)
+		keyset, err := DeriveKeyset(mintKey, seed)
 		if err != nil {
 			return newKeysets, newActiveKeysets, fmt.Errorf("DeriveKeyset(mintKey, seed) %w", err)
 		}
