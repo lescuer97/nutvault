@@ -19,7 +19,7 @@ import (
 
 type Server struct {
 	Signer signer.Signer
-	sig.SignerServiceServer
+	sig.SignatoryServer
 }
 
 func (s *Server) BlindSign(ctx context.Context, message *sig.BlindedMessages) (*sig.BlindSignResponse, error) {

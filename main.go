@@ -116,7 +116,7 @@ func main() {
 	s := grpc.NewServer(grpc.Creds(creds))
 
 	// Register the service
-	sig.RegisterSignerServiceServer(s, &routes.Server{
+	sig.RegisterSignatoryServer(s, &routes.Server{
 		Signer: signer,
 	})
 
