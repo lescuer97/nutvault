@@ -100,11 +100,6 @@ func DeriveKeyset(mintKey *hdkeychain.ExtendedKey, seed database.Seed) (MintKeys
 	}
 
 	amountsMap := OrderAndTransformAmounts(seed.Amounts)
-	if unit == cashu.AUTH {
-		newMap := make(KeysetAmounts)
-		newMap[1] = 0
-		amountsMap = newMap
-	}
 
 	if seed.Legacy {
 		slog.Info("Generating Legacy keys", slog.String("keyId", seed.Id), slog.String("amount", fmt.Sprintf("%v", seed.Amounts)))
@@ -142,7 +137,6 @@ func DeriveKeyset(mintKey *hdkeychain.ExtendedKey, seed database.Seed) (MintKeys
 			}
 		case "01":
 			id = DeriveKeysetIdV2(publicKeysList, seed.Unit, seed.FinalExpiry)
-
 		}
 	}
 
@@ -202,7 +196,7 @@ const PeanutUTF8 = uint32(129372)
 func ParseUnitToIntegerReference(unit cashu.Unit) uint32 {
 	unitSha256 := sha256.Sum256([]byte(unit.String()))
 	unitInteger := binary.BigEndian.Uint32(unitSha256[:4])
-	return unitInteger
+	return unitInteger &^ (1 << 31)
 }
 
 func KeyDerivation(key *hdkeychain.ExtendedKey, keyset *MintKeyset, seed database.Seed, unit cashu.Unit, amounts KeysetAmounts) error {

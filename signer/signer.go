@@ -171,6 +171,11 @@ func (l *Signer) getSignerPrivateKey(seed string) (*secp256k1.PrivateKey, error)
 
 func (l *Signer) createNewSeed(mintPrivateKey *hdkeychain.ExtendedKey, unit cashu.Unit, version uint64, fee uint, amounts []uint64, expiry_time *time.Time) (database.Seed, error) {
 	slog.Info("Generating new seed", slog.String("unit", unit.String()), slog.String("version", strconv.FormatInt(int64(version), 10)), slog.String("fee", strconv.FormatUint(uint64(fee), 10)))
+
+	if unit == cashu.AUTH {
+		amounts = []uint64{1}
+	}
+
 	// rotate one level up
 	newSeed := database.Seed{
 		CreatedAt:   time.Now().Unix(),

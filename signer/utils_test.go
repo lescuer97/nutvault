@@ -16,6 +16,8 @@ import (
 	"github.com/lescuer97/nutmix/api/cashu"
 )
 
+const mintPrivateKey string = "0000000000000000000000000000000000000000000000000000000000000001"
+
 func TestConvertionOfBytesToInt(t *testing.T) {
 	hexStr := "339efeab"
 	bytes, err := hex.DecodeString(hexStr)
@@ -34,7 +36,7 @@ func TestSatConvertToInteger(t *testing.T) {
 	intRef := ParseUnitToIntegerReference(cashu.Sat)
 
 	if intRef != 866057899 {
-		t.Errorf("sat bytes are wrong")
+		t.Errorf("sat bytes are wrong %v", intRef)
 	}
 }
 
@@ -42,8 +44,8 @@ func TestSatConvertToInteger(t *testing.T) {
 func TestMSatConvertToInteger(t *testing.T) {
 	intRef := ParseUnitToIntegerReference(cashu.Msat)
 
-	if intRef != 4128155635 {
-		t.Errorf("sat bytes are wrong")
+	if intRef != 1980671987 {
+		t.Errorf("msat bytes are wrong %v", intRef)
 	}
 }
 
@@ -51,24 +53,50 @@ func TestMSatConvertToInteger(t *testing.T) {
 func TestEurConvertToInteger(t *testing.T) {
 	intRef := ParseUnitToIntegerReference(cashu.EUR)
 
-	if intRef != 3122566600 {
-		t.Errorf("Eur bytes are wrong")
+	if intRef != 975082952 {
+		t.Errorf("Eur bytes are wrong %v", intRef)
 	}
 }
 func TestUsdConvertToInteger(t *testing.T) {
 	intRef := ParseUnitToIntegerReference(cashu.USD)
 
-	if intRef != 3591355783 {
-		t.Errorf("USD bytes are wrong")
+	if intRef != 1443872135 {
+		t.Errorf("USD bytes are wrong %v", intRef)
 	}
 }
 
 func TestAuthConvertToInteger(t *testing.T) {
 	intRef := ParseUnitToIntegerReference(cashu.AUTH)
 
-	if intRef != 3186924604 {
-		t.Errorf("auth bytes are wrong")
+	if intRef != 1039440956 {
+		t.Errorf("auth bytes are wrong %v", intRef)
 	}
+
+	// seedBytes, err := hex.DecodeString(mintPrivateKey)
+	// if err != nil {
+	// 	t.Errorf("hex.DecodeString(mintPrivateKey). %+v", err)
+	// }
+	//
+	// key, err := hdkeychain.NewMaster(seedBytes, &chaincfg.MainNetParams)
+	// if err != nil {
+	// 	t.Errorf("hdkeychain.NewMaster(seedBytes,&chaincfg.MainNetParams). %+v", err)
+	// }
+	// // keyset := make(MintKeyset)
+	// mintKeyset := MintKeyset{
+	// 	Keys: make(map[uint64]crypto.KeyPair),
+	// }
+	// seed := database.Seed{
+	// 	Version: 0,
+	// }
+	//
+	// maxOrders := []uint64{1}
+	// amountsMap := OrderAndTransformAmounts(maxOrders)
+	//
+	// err = KeyDerivation(key, &mintKeyset, seed, cashu.AUTH, amountsMap)
+	// if err != nil {
+	// 	t.Errorf("KeyDerivation(key,&mintKeyset, seed, cashu.AUTH, amountsMap). %+v", err)
+	// }
+
 }
 
 func TestDeriveKeysetSat(t *testing.T) {
@@ -188,7 +216,7 @@ func TestDeriveKeysetAuth(t *testing.T) {
 		Id:          "",
 		InputFeePpk: 0,
 		Legacy:      false,
-		Amounts:     GetAmountsFromMaxOrder(DefaultMaxOrder),
+		Amounts:     []uint64{1},
 	}
 	privateKeyBytes, err := hex.DecodeString(MintPrivateKey)
 	if err != nil {
@@ -209,8 +237,13 @@ func TestDeriveKeysetAuth(t *testing.T) {
 	}
 
 	keysResult := map[string]string{
-		"1": "02e18e9970c71607bcb5b41d4aac4cc007df236a15ed22ca0a8c2a26eb6f78ba96",
+		"1": "02cd342a0ecc384f6d752a16fe4892b2f59cb4ea450ec42068b68eae5ffbb398b6",
 	}
+
+	if hex.EncodeToString(mintKeyset.Id) != "00e9bc5dbbd46eeb" {
+		t.Errorf("id was incorrect. %x", mintKeyset.Id)
+	}
+
 	for key := range mintKeyset.Keys {
 		keys := mintKeyset.Keys[key]
 		val, ok := keysResult[strconv.FormatUint(key, 10)]
