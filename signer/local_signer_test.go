@@ -1,14 +1,59 @@
 package signer
 
 import (
+	"testing"
+)
+
 // "context"
 // "testing"
 
 // "github.com/lescuer97/nutmix/api/cashu"
 // mockdb "github.com/lescuer97/nutmix/internal/database/mock_db"
-)
 
 const MintPrivateKey string = "0000000000000000000000000000000000000000000000000000000000000001"
+
+func TestUnitNormalization(t *testing.T) {
+	units := []string{
+		"nuts",
+		"USD",
+		" usD ",
+		"café",
+		"cafe\u0301",
+		"eurc",
+		"sat",
+		"SAT",
+	}
+	expected := []string{
+		"NUTS",
+		"USD",
+		"USD",
+		"CAFÉ",
+		"CAFÉ",
+		"EURC",
+		"SAT",
+		"SAT",
+	}
+	expectedint := []uint32{
+		1502388627,
+		577560378,
+		577560378,
+		642348965,
+		642348965,
+		1321886550,
+		1967237907,
+		1967237907,
+	}
+	for i, unit := range units {
+		result := unitNormalization(unit)
+		if result != expected[i] {
+			t.Errorf("Unit normalization failed for %s. Expected %s, got %s", unit, expected[i], result)
+		}
+		intRef := ParseUnitToIntegerReference(result)
+		if intRef != expectedint[i] {
+			t.Errorf("Unit normalization failed for %s. Expected %v, got %v", unit, expected[i], intRef)
+		}
+	}
+}
 
 // func TestRotateUnexistingSeedUnit(t *testing.T) {
 // 	db := mockdb.MockDB{}

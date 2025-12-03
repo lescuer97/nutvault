@@ -53,7 +53,7 @@ func ConvertToKeysResponse(pubkey []byte, keys []signer.MintPublicKeyset) *sig.K
 			Active:      mintPubKey.Active,
 			InputFeePpk: uint64(mintPubKey.InputFeePpk),
 			Keys:        &keys,
-			Version:     mintPubKey.Version,
+			Version:     uint32(mintPubKey.Version),
 		}
 		if mintPubKey.FinalExpiry != nil {
 			timestamp := uint64(mintPubKey.FinalExpiry.Unix())
@@ -85,7 +85,7 @@ func ConvertToKeyRotationResponse(key signer.MintPublicKeyset) *sig.KeyRotationR
 		Active:      key.Active,
 		InputFeePpk: uint64(key.InputFeePpk),
 		Keys:        &keys,
-		Version:     key.Version,
+		Version:     uint32(key.Version),
 	}
 
 	if key.FinalExpiry != nil {

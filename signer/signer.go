@@ -24,6 +24,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/lescuer97/nutmix/api/cashu"
 	"github.com/tyler-smith/go-bip39"
+	"golang.org/x/text/unicode/norm"
 )
 
 type KeysetGenerationIndexes map[string]map[uint64]int
@@ -169,6 +170,15 @@ func (l *Signer) getSignerPrivateKey(seed string) (*secp256k1.PrivateKey, error)
 	return mintKey, nil
 }
 
+func unitNormalization(unit string) string {
+	// Remove leading and trailing ASCII whitespace characters (space, tab, carriage return, line feed).
+	unitStr := strings.TrimSpace(unit)
+	//  Apply Unicode Normalization Form C (NFC).
+	unitStr = norm.NFC.String(unitStr)
+	//  Convert the normalized string to uppercase using Unicode-aware semantics
+	return strings.ToUpper(unitStr)
+
+}
 func (l *Signer) createNewSeed(mintPrivateKey *hdkeychain.ExtendedKey, unit cashu.Unit, version uint64, fee uint, amounts []uint64, expiry_time *time.Time) (database.Seed, error) {
 	slog.Info("Generating new seed", slog.String("unit", unit.String()), slog.String("version", strconv.FormatInt(int64(version), 10)), slog.String("fee", strconv.FormatUint(uint64(fee), 10)))
 
@@ -181,7 +191,7 @@ func (l *Signer) createNewSeed(mintPrivateKey *hdkeychain.ExtendedKey, unit cash
 		CreatedAt:   time.Now().Unix(),
 		Active:      true,
 		Version:     version,
-		Unit:        unit.String(),
+		Unit:        unitNormalization(unit.String()),
 		InputFeePpk: fee,
 		Legacy:      false,
 		Amounts:     amounts,
@@ -196,6 +206,14 @@ func (l *Signer) createNewSeed(mintPrivateKey *hdkeychain.ExtendedKey, unit cash
 	if len(keyset.Id) == 0 {
 		slog.Error("Keyset id should already exists at this point ")
 		panic("keyset id was not generated")
+	}
+
+	/// check for collision
+	keysets := l.GetKeysets()
+
+	err = unitStringCollissionCheck(keysets, newSeed.Unit)
+	if err != nil {
+		return newSeed, fmt.Errorf("unitStringCollissionCheck(keysets, newSeed.Unit) %w", err)
 	}
 
 	newSeed.Id = hex.EncodeToString(keyset.Id)

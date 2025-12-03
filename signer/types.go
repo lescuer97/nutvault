@@ -11,7 +11,6 @@ import (
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/elnosh/gonuts/crypto"
-	"github.com/lescuer97/nutmix/api/cashu"
 )
 
 type MintPublicKeyset struct {
@@ -24,7 +23,7 @@ type MintPublicKeyset struct {
 	Legacy            bool
 	Version           uint64
 	FinalExpiry       *time.Time
-	Amounts []uint64
+	Amounts           []uint64
 }
 type MintKeyset struct {
 	Id                []byte
@@ -35,7 +34,7 @@ type MintKeyset struct {
 	InputFeePpk       uint
 	Version           uint64
 	FinalExpiry       *time.Time
-	Amounts []uint64
+	Amounts           []uint64
 }
 
 func MakeMintPublickeys(mintKey MintKeyset) MintPublicKeyset {
@@ -48,7 +47,7 @@ func MakeMintPublickeys(mintKey MintKeyset) MintPublicKeyset {
 		InputFeePpk:       uint(mintKey.InputFeePpk),
 		Version:           mintKey.Version,
 		FinalExpiry:       mintKey.FinalExpiry,
-		Amounts: mintKey.Amounts,
+		Amounts:           mintKey.Amounts,
 	}
 
 	for key, keypair := range mintKey.Keys {
@@ -92,7 +91,6 @@ func (s *Signer) GenerateMintKeysFromPublicKeysets(keysetIndex KeysetGenerationI
 	slog.Debug(fmt.Sprintf("\n generating keys for %v keysets\n ", len(keysetIndex)))
 	keysetsMap := s.store.GetKeysetsMapCopy()
 	for i, val := range keysetsMap {
-
 		keysetAmounts, exists := keysetIndex[hex.EncodeToString(val.Id)]
 		if !exists {
 			continue
@@ -102,22 +100,10 @@ func (s *Signer) GenerateMintKeysFromPublicKeysets(keysetIndex KeysetGenerationI
 		privateKeysets[i] = MintKeyset{Id: val.Id, Unit: val.Unit, DerivationPathIdx: val.DerivationPathIdx, Active: val.Active, InputFeePpk: val.InputFeePpk, FinalExpiry: val.FinalExpiry}
 		keyset := MintKeyset{Id: val.Id, Unit: val.Unit, DerivationPathIdx: val.DerivationPathIdx, Active: val.Active, InputFeePpk: val.InputFeePpk, Keys: make(map[uint64]crypto.KeyPair), FinalExpiry: val.FinalExpiry}
 
-		unit, err := cashu.UnitFromString(val.Unit)
+		seed := database.Seed{Active: val.Active, Id: hexId, Unit: val.Unit, Version: uint64(val.DerivationPathIdx), InputFeePpk: val.InputFeePpk, Legacy: false}
+		err := KeyDerivation(mintKey, &keyset, seed, val.Unit, keysetAmounts)
 		if err != nil {
-			return privateKeysets, fmt.Errorf("cashu.UnitFromString(val.Unit). %w", err)
-		}
-
-		seed := database.Seed{Active: val.Active, Id: hexId, Unit: val.Unit, Version: uint64(val.DerivationPathIdx), InputFeePpk: val.InputFeePpk, Legacy: val.Legacy}
-		if val.Legacy {
-			err := LegacyKeyDerivation(mintKey, &keyset, seed, unit, keysetAmounts)
-			if err != nil {
-				return privateKeysets, fmt.Errorf("LegacyKeyDerivation(mintKey,&keyset, seed, unit ) %w", err)
-			}
-		} else {
-			err := KeyDerivation(mintKey, &keyset, seed, unit, keysetAmounts)
-			if err != nil {
-				return privateKeysets, fmt.Errorf("KeyDerivation(mintKey,&keyset, seed, unit) %w", err)
-			}
+			return privateKeysets, fmt.Errorf("KeyDerivation(mintKey,&keyset, seed, unit) %w", err)
 		}
 		privateKeysets[hexId] = keyset
 	}

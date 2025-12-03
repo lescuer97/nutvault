@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"math"
 	"nutmix_remote_signer/database"
+	"nutmix_remote_signer/utils"
 	"sort"
 	"strconv"
 	"time"
@@ -101,18 +102,10 @@ func DeriveKeyset(mintKey *hdkeychain.ExtendedKey, seed database.Seed) (MintKeys
 
 	amountsMap := OrderAndTransformAmounts(seed.Amounts)
 
-	if seed.Legacy {
-		slog.Info("Generating Legacy keys", slog.String("keyId", seed.Id), slog.String("amount", fmt.Sprintf("%v", seed.Amounts)))
-		err := LegacyKeyDerivation(mintKey, &keyset, seed, unit, amountsMap)
-		if err != nil {
-			return keyset, fmt.Errorf("LegacyKeyDerivation(mintKey,&keyset, seed, unit ) %w", err)
-		}
-	} else {
-		slog.Info("Genating keys.", slog.String("keyId", seed.Id), slog.String("amount", fmt.Sprintf("%v", seed.Amounts)))
-		err := KeyDerivation(mintKey, &keyset, seed, unit, amountsMap)
-		if err != nil {
-			return keyset, fmt.Errorf("KeyDerivation(mintKey,&keyset, seed, unit) %w", err)
-		}
+	slog.Info("Genating keys.", slog.String("keyId", seed.Id), slog.String("amount", fmt.Sprintf("%v", seed.Amounts)))
+	err = KeyDerivation(mintKey, &keyset, seed, unit.String(), amountsMap)
+	if err != nil {
+		return keyset, fmt.Errorf("KeyDerivation(mintKey,&keyset, seed, unit) %w", err)
 	}
 
 	publicKeys := make(map[uint64]*secp256k1.PublicKey)
@@ -193,13 +186,14 @@ func GenerateKeypairsLegacy(versionKey *hdkeychain.ExtendedKey, values KeysetAmo
 
 const PeanutUTF8 = uint32(129372)
 
-func ParseUnitToIntegerReference(unit cashu.Unit) uint32 {
-	unitSha256 := sha256.Sum256([]byte(unit.String()))
+func ParseUnitToIntegerReference(unit string) uint32 {
+	unit = unitNormalization(unit)
+	unitSha256 := sha256.Sum256([]byte(unit))
 	unitInteger := binary.BigEndian.Uint32(unitSha256[:4])
 	return unitInteger &^ (1 << 31)
 }
 
-func KeyDerivation(key *hdkeychain.ExtendedKey, keyset *MintKeyset, seed database.Seed, unit cashu.Unit, amounts KeysetAmounts) error {
+func KeyDerivation(key *hdkeychain.ExtendedKey, keyset *MintKeyset, seed database.Seed, unit string, amounts KeysetAmounts) error {
 	peanutKey, err := key.Derive(hdkeychain.HardenedKeyStart + PeanutUTF8)
 	if err != nil {
 		return fmt.Errorf("mintKey.NewChildKey(uint32(unit.EnumIndex())). %w", err)
@@ -296,4 +290,26 @@ func GetAmountsFromMaxOrder(max_order uint32) []uint64 {
 		keys = append(keys, uint64(math.Pow(2, float64(i))))
 	}
 	return keys
+}
+
+func unitStringCollissionCheck(keysets []MintPublicKeyset, newUnit string) error {
+	keysetsSet := make(map[string]struct{})
+	for i := range keysets {
+		keysetsSet[keysets[i].Unit] = struct{}{}
+	}
+
+	_, exists := keysetsSet[newUnit]
+	if exists {
+		return nil
+	}
+
+	newUnitInt := ParseUnitToIntegerReference(newUnit)
+	log.Println("newUnitInt: ", newUnitInt)
+	for unit := range keysetsSet {
+		if ParseUnitToIntegerReference(unit) == newUnitInt {
+			return fmt.Errorf("%w. unit: %v", utils.ErrUnitStringCollision, newUnit)
+		}
+	}
+
+	return nil
 }
