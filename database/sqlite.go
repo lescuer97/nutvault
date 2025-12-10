@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"errors"
 	"fmt"
 	"log"
 	"log/slog"
@@ -108,6 +109,9 @@ func (sq *SqliteDB) GetSeedsByUnit(tx *sql.Tx, unit cashu.Unit) ([]Seed, error) 
 
 	rows, err := stmt.Query(unit.String())
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return seeds, nil
+		}
 		return seeds, fmt.Errorf(`stmt.Query(args...). %w`, err)
 	}
 	defer rows.Close()

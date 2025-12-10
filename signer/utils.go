@@ -12,6 +12,7 @@ import (
 	"nutmix_remote_signer/utils"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
@@ -95,7 +96,7 @@ func DeriveKeyset(mintKey *hdkeychain.ExtendedKey, seed database.Seed) (MintKeys
 	}
 
 	slog.Debug("converting unit to cashu unit", slog.String("unit", seed.Unit))
-	unit, err := cashu.UnitFromString(seed.Unit)
+	unit, err := cashu.UnitFromString(strings.ToLower(seed.Unit))
 	if err != nil {
 		return keyset, fmt.Errorf("UnitFromString(seed.Unit) %w", err)
 	}

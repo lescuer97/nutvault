@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"nutmix_remote_signer/database"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -21,7 +22,6 @@ import (
 	"github.com/elnosh/gonuts/cashu/nuts/nut11"
 	"github.com/elnosh/gonuts/cashu/nuts/nut14"
 	"github.com/elnosh/gonuts/crypto"
-	"github.com/jackc/pgx/v5"
 	"github.com/lescuer97/nutmix/api/cashu"
 	"github.com/tyler-smith/go-bip39"
 	"golang.org/x/text/unicode/norm"
@@ -39,28 +39,46 @@ func SetupLocalSigner(db database.SqliteDB, config Config) (Signer, error) {
 		db:    db,
 		store: NewKeysetStore(),
 	}
-	slog.Info("Trying to get the Mint key")
-	// mint_privkey := os.Getenv("MINT_PRIVATE_KEY")
-	seedFromDbus, err := GetNutmixSignerKey()
+
+	err := SetupKeychain()
 	if err != nil {
-		return signer, fmt.Errorf("signer.getSignerPrivateKey(). %w", err)
+		return signer, fmt.Errorf("SetupKeychain(). %w", err)
 	}
 
-	privateKey, err := signer.getSignerPrivateKey(seedFromDbus)
+	slog.Info("Trying to get the Mint key")
+	// mint_privkey := os.Getenv("MINT_PRIVATE_KEY")
+	seedFromLibSecret, err := GetNutmixSignerKey()
+	defer func() {
+		seedFromLibSecret = ""
+	}()
+
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			slog.Warn("seedphrase was not found in store. looking for one or generating one.")
+			seedFromLibSecret, err = signer.findOrGenerateANewSeedphrase()
+			if err != nil {
+				return signer, fmt.Errorf("signer.findOrGenerateANewSeedphrase(). %w", err)
+			}
+		} else {
+			return signer, fmt.Errorf("signer.getSignerPrivateKey(). %w", err)
+		}
+	}
+
+	privateKey, err := signer.getSignerPrivateKey(seedFromLibSecret)
+	defer func() {
+		privateKey = nil
+	}()
 	if err != nil {
 		return signer, fmt.Errorf("signer.getSignerPrivateKey(). %w", err)
 	}
 	slog.Debug("Creating master key for derivation")
 	masterKey, err := hdkeychain.NewMaster(privateKey.Serialize(), &chaincfg.MainNetParams)
+	defer func() {
+		masterKey = nil
+	}()
 	if err != nil {
 		return signer, fmt.Errorf(" bip32.NewMasterKey(privateKey.Serialize()). %w", err)
 	}
-	defer func() {
-		slog.Debug("Cleaning up priv key variables")
-		seedFromDbus = ""
-		privateKey = nil
-		masterKey = nil
-	}()
 
 	seeds, err := signer.db.GetAllSeeds()
 	if err != nil {
@@ -236,9 +254,7 @@ func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint64, amounts []uint64, exp
 	slog.Debug("Getting seed from unit", slog.String("unit", unit.String()))
 	seeds, err := l.db.GetSeedsByUnit(tx, unit)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return newKey, fmt.Errorf("database.GetSeedsByUnit(tx, unit). %w", err)
-		}
+		return newKey, fmt.Errorf("database.GetSeedsByUnit(tx, unit). %w", err)
 	}
 	slog.Debug("Finding highest current version of seed")
 	for i, seed := range seeds {
@@ -478,6 +494,44 @@ func (l *Signer) validateProof(keysets map[string]MintKeyset, proof goNutsCashu.
 // returns serialized compressed public key
 func (l *Signer) GetSignerPubkey() []byte {
 	return l.pubkey.SerializeCompressed()
+}
+
+// returns serialized compressed public key
+func (l *Signer) findOrGenerateANewSeedphrase() (string, error) {
+	env_mnemonic := os.Getenv("MNEMONIC")
+	defer func() {
+		env_mnemonic = ""
+	}()
+
+	if len(env_mnemonic) > 0 {
+		if !bip39.IsMnemonicValid(env_mnemonic) {
+			return "", fmt.Errorf("invalid mnemonic seedphrase")
+		}
+		err := StoreSeedPhrase(env_mnemonic)
+		if err != nil {
+			return "", fmt.Errorf("StoreSeedPhrase(mnemonic). %w", err)
+
+		}
+		return env_mnemonic, nil
+	}
+
+	entropy, err := bip39.NewEntropy(256)
+	defer func() {
+		entropy = nil
+	}()
+	if err != nil {
+		return "", fmt.Errorf("bip39.NewEntropy(256). %w", err)
+	}
+	mnemonic, err := bip39.NewMnemonic(entropy)
+	if err != nil {
+		return "", fmt.Errorf("bip39.NewMnemonic(entropy). %w", err)
+	}
+	err = StoreSeedPhrase(mnemonic)
+	if err != nil {
+		return "", fmt.Errorf("StoreSeedPhrase(mnemonic). %w", err)
+
+	}
+	return mnemonic, nil
 }
 
 func verifyP2PKLockedProof(proof goNutsCashu.Proof, proofSecret nut10.WellKnownSecret) error {

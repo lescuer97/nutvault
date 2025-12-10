@@ -1,83 +1,82 @@
 package signer
 
 import (
+	"encoding/hex"
+	"errors"
 	"fmt"
-	"log/slog"
 
-	"github.com/godbus/dbus/v5"
+	goLibSecret "github.com/lescuer97/go-libsecret"
 )
 
-type SecretStructure struct {
-	Session     dbus.ObjectPath
-	Parameters  []byte
-	Value       []byte
-	ContentType string
+const Service = "nutvault"
+const masterKey = "master-key"
+const SchemaName = "org.app.Nutvault"
+
+var (
+	ErrNotFound    = errors.New("Could not found value in keystore")
+	SchemaNotSetup = errors.New("Main schema was not setup you need that first")
+)
+
+var mainSchema *goLibSecret.Schema
+
+func SetupKeychain() error {
+	attr := map[string]goLibSecret.SchemaAttributeType{
+		"key": goLibSecret.SchemaAttributeString,
+	}
+
+	schema, err := goLibSecret.NewSchema(SchemaName, goLibSecret.SchemaFlagsNone, attr)
+	if err != nil {
+		return fmt.Errorf("goLibSecret.NewSchema(SchemaName). %w", err)
+
+	}
+
+	mainSchema = schema
+	return nil
 }
 
-// GetNutmixSignerKey retrieves the secret key for the nutmix-remote-signer application
-// from the system's secret service (libsecret) via DBus
 func GetNutmixSignerKey() (string, error) {
-	slog.Debug("connecting to dbus")
-	// Connect to the session bus
-	conn, err := dbus.ConnectSessionBus()
+	key, err := getSecret(masterKey)
 	if err != nil {
-		return "", fmt.Errorf("failed to connect to session bus: %v", err)
+		return "", fmt.Errorf("getSecret(masterKey). %w", err)
+
 	}
-	defer conn.Close()
+	return string(key), nil
+}
 
-	// Get the Secret Service object
-	secretService := conn.Object("org.freedesktop.secrets", "/org/freedesktop/secrets")
+func StoreSeedPhrase(mnemonic string) error {
+	return setSecret(masterKey, []byte(mnemonic))
+}
 
-	// Get the default collection
-	var defaultCollection dbus.ObjectPath
-	err = secretService.Call("org.freedesktop.Secret.Service.ReadAlias", 0, "default").Store(&defaultCollection)
+func setSecret(id string, secret []byte) error {
+	if mainSchema == nil {
+		return SchemaNotSetup
+	}
+
+	attr := map[string]string{
+		"key": id,
+	}
+
+	return goLibSecret.StorePassword(mainSchema, attr, goLibSecret.CollectionDefault, SchemaName, hex.EncodeToString(secret))
+}
+
+func getSecret(id string) ([]byte, error) {
+	if mainSchema == nil {
+		return nil, SchemaNotSetup
+	}
+	attrs := goLibSecret.NewAttributes()
+	attrs.Set("key", id)
+
+	val, err := goLibSecret.PasswordLookupSync(mainSchema, attrs)
 	if err != nil {
-		return "", fmt.Errorf("failed to get default collection: %v", err)
+		return nil, fmt.Errorf("goLibSecret.PasswordLookupSync(mainSchema, attrs). %w", err)
+	}
+	if val == "" {
+		return nil, ErrNotFound
 	}
 
-	// Create the collection object
-	collection := conn.Object("org.freedesktop.secrets", defaultCollection)
-
-	// Create search attributes for our app
-	searchAttributes := map[string]string{
-		"label": "nutvault-seed",
-	}
-
-	slog.Debug("Getting secret form org.freedesktop")
-	// Search for items matching our criteria
-	var resultItems []dbus.ObjectPath
-	err = collection.Call("org.freedesktop.Secret.Collection.SearchItems", 0, searchAttributes).Store(&resultItems)
+	secret, err := hex.DecodeString(val)
 	if err != nil {
-		return "", fmt.Errorf("failed to search items: %v", err)
+		return nil, fmt.Errorf("hex.DecodeString(). %w", err)
 	}
-	slog.Debug("trying to get private key from secret service")
-
-	// Create a session for secret transfer
-	var openSession dbus.ObjectPath
-	var sessionAlgorithm string
-	err = secretService.Call("org.freedesktop.Secret.Service.OpenSession", 0, "plain", dbus.MakeVariant("")).Store(&sessionAlgorithm, &openSession)
-	if err != nil {
-		return "", fmt.Errorf("failed to open session: %v", err)
-	}
-
-	// If we have a result, get the existing secret
-	if len(resultItems) > 0 {
-		// Get the first item
-		item := conn.Object("org.freedesktop.secrets", resultItems[0])
-
-		// Get the secret
-		var secretStruct SecretStructure
-
-		slog.Info("Getting private key from secret")
-		err = item.Call("org.freedesktop.Secret.Item.GetSecret", 0, openSession).Store(&secretStruct)
-		if err != nil {
-			return "", fmt.Errorf("failed to get secret: %v", err)
-		}
-
-		// Convert the secret value to a string
-		secretValue := string(secretStruct.Value)
-		return secretValue, nil
-	}
-
-	return "", fmt.Errorf("No Private key in the Libsecret for application: nutmix-remote-signer.\n Please follow the Documentation")
+	return secret, nil
 }
