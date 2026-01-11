@@ -272,12 +272,11 @@ func TestKeysetIdGenerationV2Vector1(t *testing.T) {
 		keysMap[uKey] = pk
 	}
 
-	pubkeyList := convertPubkeysMapToOrderArray(keysMap)
-
 	finalExpiry := time.Unix(2059210353, 0)
-	keysetId := DeriveKeysetIdV2(pubkeyList, cashu.Sat.String(), &finalExpiry)
+	fee := uint(100)
+	keysetId := DeriveKeysetIdV2(keysMap, cashu.Sat.String(), fee, &finalExpiry)
 
-	if keysetId != "01adc013fa9d85171586660abab27579888611659d357bc86bc09cb26eee8bc035" {
+	if keysetId != "015ba18a8adcd02e715a58358eb618da4a4b3791151a4bee5e968bb88406ccf76a" {
 		t.Errorf("keyset id is not correct.")
 	}
 }
@@ -378,12 +377,11 @@ func TestKeysetIdGenerationV2Vector2(t *testing.T) {
 		keysMap[uKey] = pk
 	}
 
-	pubkeyList := convertPubkeysMapToOrderArray(keysMap)
-
+	fee := uint(0)
 	finalExpiry := time.Unix(2059210353, 0)
-	keysetId := DeriveKeysetIdV2(pubkeyList, cashu.Sat.String(), &finalExpiry)
+	keysetId := DeriveKeysetIdV2(keysMap, cashu.Sat.String(), fee, &finalExpiry)
 
-	if keysetId != "0125bc634e270ad7e937af5b957f8396bb627d73f6e1fd2ffe4294c26b57daf9e0" {
+	if keysetId != "01ab6aa4ff30390da34986d84be5274b48ad7a74265d791095bfc39f4098d9764f" {
 		t.Errorf("keyset id is not correct.")
 	}
 }
@@ -484,10 +482,10 @@ func TestKeysetIdGenerationV2Vector3(t *testing.T) {
 		keysMap[uKey] = pk
 	}
 
-	pubkeyList := convertPubkeysMapToOrderArray(keysMap)
-	keysetId := DeriveKeysetIdV2(pubkeyList, cashu.Sat.String(), nil)
+	fee := uint(0)
+	keysetId := DeriveKeysetIdV2(keysMap, cashu.Sat.String(), fee, nil)
 
-	if keysetId != "016d72f27c8d22808ad66d1959b3dab83af17e2510db7ffd57d2365d9eec3ced75" {
+	if keysetId != "012fbb01a4e200c76df911eeba3b8fe1831202914b24664f4bccbd25852a6708f8" {
 		t.Errorf("keyset id is not correct.")
 	}
 }
