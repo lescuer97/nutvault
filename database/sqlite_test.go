@@ -2,7 +2,6 @@ package database
 
 import (
 	"context"
-	"log"
 	"testing"
 
 	"github.com/lescuer97/nutmix/api/cashu"
@@ -57,7 +56,6 @@ func TestSeedRotation(t *testing.T) {
 		CreatedAt:   2,
 	}
 
-	log.Printf("Before Save New seed")
 	err = sqlite.SaveNewSeed(tx, seed2)
 	if err != nil {
 		t.Errorf(`Could not save seed. %+v`, err)

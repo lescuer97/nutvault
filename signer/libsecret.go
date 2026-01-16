@@ -1,7 +1,6 @@
 package signer
 
 import (
-	"encoding/hex"
 	"errors"
 	"fmt"
 
@@ -40,14 +39,14 @@ func GetNutmixSignerKey() (string, error) {
 		return "", fmt.Errorf("getSecret(masterKey). %w", err)
 
 	}
-	return string(key), nil
+	return key, nil
 }
 
 func StoreSeedPhrase(mnemonic string) error {
-	return setSecret(masterKey, []byte(mnemonic))
+	return setSecret(masterKey,mnemonic)
 }
 
-func setSecret(id string, secret []byte) error {
+func setSecret(id string, secret string) error {
 	if mainSchema == nil {
 		return SchemaNotSetup
 	}
@@ -56,27 +55,23 @@ func setSecret(id string, secret []byte) error {
 		"key": id,
 	}
 
-	return goLibSecret.StorePassword(mainSchema, attr, goLibSecret.CollectionDefault, SchemaName, hex.EncodeToString(secret))
+	return goLibSecret.StorePassword(mainSchema, attr, goLibSecret.CollectionDefault, SchemaName, secret)
 }
 
-func getSecret(id string) ([]byte, error) {
+func getSecret(id string) (string, error) {
 	if mainSchema == nil {
-		return nil, SchemaNotSetup
+		return "", SchemaNotSetup
 	}
 	attrs := goLibSecret.NewAttributes()
 	attrs.Set("key", id)
 
 	val, err := goLibSecret.PasswordLookupSync(mainSchema, attrs)
 	if err != nil {
-		return nil, fmt.Errorf("goLibSecret.PasswordLookupSync(mainSchema, attrs). %w", err)
+		return "", fmt.Errorf("goLibSecret.PasswordLookupSync(mainSchema, attrs). %w", err)
 	}
 	if val == "" {
-		return nil, ErrNotFound
+		return "", ErrNotFound
 	}
 
-	secret, err := hex.DecodeString(val)
-	if err != nil {
-		return nil, fmt.Errorf("hex.DecodeString(). %w", err)
-	}
-	return secret, nil
+	return val, nil
 }

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/fxamacker/cbor/v2"
@@ -107,7 +108,7 @@ func (sq *SqliteDB) GetSeedsByUnit(tx *sql.Tx, unit cashu.Unit) ([]Seed, error) 
 	}
 	defer stmt.Close()
 
-	rows, err := stmt.Query(unit.String())
+	rows, err := stmt.Query(strings.ToUpper(unit.String()))
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return seeds, nil

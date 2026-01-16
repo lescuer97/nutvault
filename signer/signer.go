@@ -54,7 +54,7 @@ func SetupLocalSigner(db database.SqliteDB, config Config) (Signer, error) {
 
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
-			slog.Warn("seedphrase was not found in store. looking for one or generating one.")
+			slog.Warn("seedphrase was not found in store. looking for one or generating one.", slog.Any("error", err))
 			seedFromLibSecret, err = signer.findOrGenerateANewSeedphrase()
 			if err != nil {
 				return signer, fmt.Errorf("signer.findOrGenerateANewSeedphrase(). %w", err)
@@ -64,15 +64,13 @@ func SetupLocalSigner(db database.SqliteDB, config Config) (Signer, error) {
 		}
 	}
 
-	privateKey, err := signer.getSignerPrivateKey(seedFromLibSecret)
-	defer func() {
-		privateKey = nil
-	}()
-	if err != nil {
-		return signer, fmt.Errorf("signer.getSignerPrivateKey(). %w", err)
+	if !bip39.IsMnemonicValid(seedFromLibSecret) {
+		return signer, errors.New("mnemonic is not valid or not in English")
 	}
+	seedBytes := bip39.NewSeed(seedFromLibSecret, "")
+
 	slog.Debug("Creating master key for derivation")
-	masterKey, err := hdkeychain.NewMaster(privateKey.Serialize(), &chaincfg.MainNetParams)
+	masterKey, err := hdkeychain.NewMaster(seedBytes, &chaincfg.MainNetParams)
 	defer func() {
 		masterKey = nil
 	}()
@@ -93,7 +91,7 @@ func SetupLocalSigner(db database.SqliteDB, config Config) (Signer, error) {
 		amounts := GetAmountsFromMaxOrder(DefaultMaxOrder)
 
 		slog.Info("Creating a new seed")
-		newSeed, err := signer.createNewSeed(masterKey, cashu.Sat, 1, 0, amounts, config.ExpireTime)
+		newSeed, err := signer.createNewSeed(masterKey, cashu.Sat, 0, 0, amounts, config.ExpireTime)
 
 		if err != nil {
 			return signer, fmt.Errorf("signer.createNewSeed(masterKey, 1, 0). %w", err)
@@ -132,8 +130,12 @@ func SetupLocalSigner(db database.SqliteDB, config Config) (Signer, error) {
 	}
 
 	slog.Debug("Setting keysets into the signer")
+	pubkey, err := masterKey.ECPubKey()
+	if err != nil {
+		return signer, fmt.Errorf(`masterKey.ECPubKey(). %w`, err)
+	}
 	// already stored in signer.store earlier
-	signer.pubkey = privateKey.PubKey()
+	signer.pubkey = pubkey
 
 	return signer, nil
 }
@@ -250,7 +252,7 @@ func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint64, amounts []uint64, exp
 	defer tx.Rollback()
 
 	// get current highest seed version
-	var highestSeed database.Seed = database.Seed{Version: 0}
+	highestSeedVersion := uint64(0)
 	slog.Debug("Getting seed from unit", slog.String("unit", unit.String()))
 	seeds, err := l.db.GetSeedsByUnit(tx, unit)
 	if err != nil {
@@ -258,14 +260,14 @@ func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint64, amounts []uint64, exp
 	}
 	slog.Debug("Finding highest current version of seed")
 	for i, seed := range seeds {
-		if highestSeed.Version < seed.Version {
-			highestSeed = seed
+		if uint64(highestSeedVersion) < seed.Version {
+			highestSeedVersion = seed.Version + uint64(1)
 		}
 
 		seeds[i].Active = false
 	}
 
-	slog.Info(fmt.Sprintf("Current hightest seed. Version: %v. Id: %s", highestSeed.Version, highestSeed.Id))
+	slog.Info(fmt.Sprintf("Current hightest seed. Version: %v. ", highestSeedVersion))
 
 	seedFromDBUS, err := GetNutmixSignerKey()
 	if err != nil {
@@ -283,7 +285,7 @@ func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint64, amounts []uint64, exp
 	}
 
 	// Create New seed with one higher version
-	newSeed, err := l.createNewSeed(signerMasterKey, unit, highestSeed.Version+1, uint(fee), amounts, expiry_time)
+	newSeed, err := l.createNewSeed(signerMasterKey, unit, highestSeedVersion, uint(fee), amounts, expiry_time)
 
 	if err != nil {
 		return newKey, fmt.Errorf(`l.createNewSeed(signerMasterKey, unit, highestSeed.Version+1, fee) %w`, err)
@@ -303,17 +305,17 @@ func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint64, amounts []uint64, exp
 		}
 	}
 
-	seeds = append(seeds, newSeed)
+	err = tx.Commit()
+	if err != nil {
+		return newKey, fmt.Errorf(`tx.Commit(). %w`, err)
+	}
 
+	seeds = append(seeds, newSeed)
 	keysets, activeKeysets, err := GetKeysetsFromSeeds(seeds, signerMasterKey)
 	if err != nil {
 		return newKey, fmt.Errorf(`m.DeriveKeysetFromSeeds(seeds, parsedPrivateKey). %w`, err)
 	}
 
-	err = tx.Commit()
-	if err != nil {
-		return newKey, fmt.Errorf(`tx.Commit(). %w`, err)
-	}
 	// Parse the seeds to get the amounts indexes
 	// store indexes in the keyset store
 	l.store.SetIndexesFromSeeds(seeds)

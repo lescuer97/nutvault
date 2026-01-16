@@ -137,7 +137,7 @@ func DeriveKeyset(mintKey *hdkeychain.ExtendedKey, seed database.Seed) (MintKeys
 
 	amountsMap := OrderAndTransformAmounts(seed.Amounts)
 
-	slog.Info("Genating keys.", slog.String("keyId", seed.Id), slog.String("amount", fmt.Sprintf("%v", seed.Amounts)))
+	slog.Info("Generating Key keys.", slog.String("keyId", seed.Id), slog.String("amount", fmt.Sprintf("%v", seed.Amounts)))
 	err = KeyDerivation(mintKey, &keyset, seed, unit.String(), amountsMap)
 	if err != nil {
 		return keyset, fmt.Errorf("KeyDerivation(mintKey,&keyset, seed, unit) %w", err)
@@ -284,7 +284,7 @@ func GetKeysetsFromSeeds(seeds []database.Seed, mintKey *hdkeychain.ExtendedKey)
 		}
 
 		if hex.EncodeToString(keyset.Id) != seed.Id {
-			log.Panicf("The ids should be same. Keyset.Id: %v. Seed.Id: %v", keyset.Id, seed.Id)
+			log.Panicf("The ids should be same. Keyset.Id: %x. Seed.Id: %v", keyset.Id, seed.Id)
 		}
 
 		publicKeyset := MakeMintPublickeys(keyset)
@@ -300,7 +300,7 @@ func GetKeysetsFromSeeds(seeds []database.Seed, mintKey *hdkeychain.ExtendedKey)
 	return newKeysets, newActiveKeysets, nil
 }
 
-const DefaultMaxOrder = uint32(64)
+const DefaultMaxOrder = uint32(32)
 
 // key is the amount and I is the index for derivation
 type KeysetAmounts = map[uint64]int
