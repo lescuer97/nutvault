@@ -47,7 +47,7 @@ func SetupLocalSigner(db database.SqliteDB, config Config) (Signer, error) {
 
 	slog.Info("Trying to get the Mint key")
 	// mint_privkey := os.Getenv("MINT_PRIVATE_KEY")
-	seedFromLibSecret, err := GetNutmixSignerKey()
+	seedFromLibSecret, err := getNutmixSignerKey()
 	defer func() {
 		seedFromLibSecret = ""
 	}()
@@ -180,16 +180,6 @@ func (l *Signer) GetKeysets() []MintPublicKeyset {
 	return l.store.GetKeysetsList()
 }
 
-func (l *Signer) getSignerPrivateKey(seed string) (*secp256k1.PrivateKey, error) {
-	slog.Debug("parsing private_key")
-	seedBytes, err := bip39.EntropyFromMnemonic(seed)
-	if err != nil {
-		return nil, fmt.Errorf(`bip39.EntropyFromMnemonic(seed). %w`, err)
-	}
-	mintKey := secp256k1.PrivKeyFromBytes(seedBytes)
-	return mintKey, nil
-}
-
 func unitNormalization(unit string) string {
 	// Remove leading and trailing ASCII whitespace characters (space, tab, carriage return, line feed).
 	unitStr := strings.TrimSpace(unit)
@@ -260,7 +250,7 @@ func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint64, amounts []uint64, exp
 	}
 	slog.Debug("Finding highest current version of seed")
 	for i, seed := range seeds {
-		if uint64(highestSeedVersion) < seed.Version {
+		if uint64(highestSeedVersion) <= seed.Version {
 			highestSeedVersion = seed.Version + uint64(1)
 		}
 
@@ -269,23 +259,16 @@ func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint64, amounts []uint64, exp
 
 	slog.Info(fmt.Sprintf("Current hightest seed. Version: %v. ", highestSeedVersion))
 
-	seedFromDBUS, err := GetNutmixSignerKey()
+	masterKey, err := GetMasterKey()
+	defer func() {
+		masterKey = nil
+	}()
 	if err != nil {
-		return newKey, fmt.Errorf("signer.getSignerPrivateKey(). %w", err)
-	}
-
-	mintPrivateKey, err := l.getSignerPrivateKey(seedFromDBUS)
-	if err != nil {
-		return newKey, fmt.Errorf(`l.getSignerPrivateKey() %w`, err)
-	}
-
-	signerMasterKey, err := hdkeychain.NewMaster(mintPrivateKey.Serialize(), &chaincfg.MainNetParams)
-	if err != nil {
-		return newKey, fmt.Errorf(" hdkeychain.NewMaster(mintPrivateKey.Serialize()). %w", err)
+		return newKey, fmt.Errorf(" bip32.NewMasterKey(privateKey.Serialize()). %w", err)
 	}
 
 	// Create New seed with one higher version
-	newSeed, err := l.createNewSeed(signerMasterKey, unit, highestSeedVersion, uint(fee), amounts, expiry_time)
+	newSeed, err := l.createNewSeed(masterKey, unit, highestSeedVersion, uint(fee), amounts, expiry_time)
 
 	if err != nil {
 		return newKey, fmt.Errorf(`l.createNewSeed(signerMasterKey, unit, highestSeed.Version+1, fee) %w`, err)
@@ -309,9 +292,9 @@ func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint64, amounts []uint64, exp
 	if err != nil {
 		return newKey, fmt.Errorf(`tx.Commit(). %w`, err)
 	}
-
 	seeds = append(seeds, newSeed)
-	keysets, activeKeysets, err := GetKeysetsFromSeeds(seeds, signerMasterKey)
+
+	keysets, activeKeysets, err := GetKeysetsFromSeeds(seeds, masterKey)
 	if err != nil {
 		return newKey, fmt.Errorf(`m.DeriveKeysetFromSeeds(seeds, parsedPrivateKey). %w`, err)
 	}
@@ -323,7 +306,6 @@ func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint64, amounts []uint64, exp
 	// update store with newly derived keysets
 	l.store.SetAll(keysets, activeKeysets)
 
-	signerMasterKey = nil
 	return func() (MintPublicKeyset, error) {
 		ks, ok := l.store.GetKeysetById(newSeed.Id)
 		if !ok {

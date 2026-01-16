@@ -8,8 +8,6 @@ import (
 	"nutmix_remote_signer/database"
 	"time"
 
-	"github.com/btcsuite/btcd/btcutil/hdkeychain"
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/elnosh/gonuts/crypto"
 )
 
@@ -64,28 +62,12 @@ func MakeMintPublickeys(mintKey MintKeyset) MintPublicKeyset {
 func (s *Signer) GenerateMintKeysFromPublicKeysets(keysetIndex KeysetGenerationIndexes) (map[string]MintKeyset, error) {
 
 	privateKeysets := make(map[string]MintKeyset)
-	seedFromDBUS, err := GetNutmixSignerKey()
+	masterKey, err := GetMasterKey()
 	defer func() {
-		seedFromDBUS = ""
+		masterKey = nil
 	}()
 	if err != nil {
-		return privateKeysets, fmt.Errorf("signer.getSignerPrivateKey(). %w", err)
-	}
-
-	privateKey, err := s.getSignerPrivateKey(seedFromDBUS)
-	defer func() {
-		privateKey = nil
-	}()
-	if err != nil {
-		return privateKeysets, fmt.Errorf("signer.getSignerPrivateKey(). %w", err)
-	}
-	mintKey, err := hdkeychain.NewMaster(privateKey.Serialize(), &chaincfg.MainNetParams)
-	defer func() {
-		mintKey = nil
-	}()
-
-	if err != nil {
-		return privateKeysets, fmt.Errorf(" bip32.NewMasterKey(privateKey.Serialize()). %w", err)
+		return nil, fmt.Errorf(" bip32.NewMasterKey(privateKey.Serialize()). %w", err)
 	}
 
 	slog.Debug(fmt.Sprintf("\n generating keys for %v keysets\n ", len(keysetIndex)))
@@ -101,7 +83,7 @@ func (s *Signer) GenerateMintKeysFromPublicKeysets(keysetIndex KeysetGenerationI
 		keyset := MintKeyset{Id: val.Id, Unit: val.Unit, DerivationPathIdx: val.DerivationPathIdx, Active: val.Active, InputFeePpk: val.InputFeePpk, Keys: make(map[uint64]crypto.KeyPair), FinalExpiry: val.FinalExpiry}
 
 		seed := database.Seed{Active: val.Active, Id: hexId, Unit: val.Unit, Version: uint64(val.DerivationPathIdx), InputFeePpk: val.InputFeePpk, Legacy: false}
-		err := KeyDerivation(mintKey, &keyset, seed, val.Unit, keysetAmounts)
+		err := KeyDerivation(masterKey, &keyset, seed, val.Unit, keysetAmounts)
 		if err != nil {
 			return privateKeysets, fmt.Errorf("KeyDerivation(mintKey,&keyset, seed, unit) %w", err)
 		}

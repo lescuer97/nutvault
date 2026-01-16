@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
 	"log/slog"
@@ -16,9 +17,11 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/elnosh/gonuts/crypto"
 	"github.com/lescuer97/nutmix/api/cashu"
+	"github.com/tyler-smith/go-bip39"
 )
 
 func DeriveKeysetId(keysets []*secp256k1.PublicKey) (string, error) {
@@ -271,6 +274,28 @@ func GenerateKeypairs(versionKey *hdkeychain.ExtendedKey, values KeysetAmounts, 
 		keyset.Keys[value] = keypair
 	}
 	return nil
+}
+
+func GetMasterKey() (*hdkeychain.ExtendedKey, error) {
+	seedFromDBUS, err := getNutmixSignerKey()
+	defer func() {
+		seedFromDBUS = ""
+	}()
+	if err != nil {
+		return nil, fmt.Errorf("signer.getSignerPrivateKey(). %w", err)
+	}
+
+	if !bip39.IsMnemonicValid(seedFromDBUS) {
+		return nil, errors.New("mnemonic is not valid or not in English")
+	}
+	seedBytes := bip39.NewSeed(seedFromDBUS, "")
+
+	slog.Debug("Creating master key for derivation")
+	masterKey, err := hdkeychain.NewMaster(seedBytes, &chaincfg.MainNetParams)
+	if err != nil {
+		return nil, fmt.Errorf(" bip32.NewMasterKey(privateKey.Serialize()). %w", err)
+	}
+	return masterKey, nil
 }
 
 func GetKeysetsFromSeeds(seeds []database.Seed, mintKey *hdkeychain.ExtendedKey) (map[string]MintPublicKeyset, map[string]MintPublicKeyset, error) {

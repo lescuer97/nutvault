@@ -33,7 +33,7 @@ func SetupKeychain() error {
 	return nil
 }
 
-func GetNutmixSignerKey() (string, error) {
+func getNutmixSignerKey() (string, error) {
 	key, err := getSecret(masterKey)
 	if err != nil {
 		return "", fmt.Errorf("getSecret(masterKey). %w", err)
