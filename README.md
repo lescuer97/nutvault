@@ -6,20 +6,20 @@
 
 Run this command at the base of the repo:
 ```bash
-protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative --experimental_allow_proto3_optional gen/signer.proto
+just proto
 ```
 
 ## Adding a seedphrase 
-When you run the signer for the first time you will need to add your private key to the libsecret service. 
+The signer now creates a seedphrase automatically. You can still set one manually if you want to control the value.
 This should be a BIP-39 seedphrase.
 ```bash 
-# NOTE: when you run this command you will get a prompt for password. This is where you paste the seedphrase.
-secret-tool store --label="nutvault-seed" label nutvault-seed
+# Optional: when you run this command you will get a prompt for password. This is where you paste the seedphrase.
+just seed
 ```
 
 To run the signer do:
 ```bash
-go run ./...
+just dev
 ```
 
 ## How the signer communicates
@@ -35,7 +35,5 @@ The files should be called:
 - server-cert.pem 
 - server-key.pem
 - ca-cert.pem
-
-
 
 
