@@ -68,7 +68,6 @@ func SetupLocalSigner(db database.SqliteDB, config Config) (Signer, error) {
 		return signer, errors.New("mnemonic is not valid or not in English")
 	}
 	seedBytes := bip39.NewSeed(seedFromLibSecret, "")
-
 	slog.Debug("Creating master key for derivation")
 	masterKey, err := hdkeychain.NewMaster(seedBytes, &chaincfg.MainNetParams)
 	defer func() {
@@ -101,7 +100,9 @@ func SetupLocalSigner(db database.SqliteDB, config Config) (Signer, error) {
 		if err != nil {
 			return signer, fmt.Errorf("l.db.GetTx(ctx). %w", err)
 		}
-		defer tx.Rollback()
+		defer func() {
+			_ = tx.Rollback()
+		}()
 
 		slog.Info("Saving seed for to the database")
 		err = db.SaveNewSeed(tx, newSeed)
@@ -232,14 +233,16 @@ func (l *Signer) createNewSeed(mintPrivateKey *hdkeychain.ExtendedKey, unit cash
 }
 
 func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint64, amounts []uint64, expiry_time *time.Time) (MintPublicKeyset, error) {
-	slog.Info("Rotating keyset", slog.String("unit", unit.String()), slog.String("fee", strconv.FormatUint(uint64(fee), 10)))
+	slog.Info("Rotating keyset", slog.String("unit", unit.String()), slog.String("fee", strconv.FormatUint(fee, 10)))
 	newKey := MintPublicKeyset{}
 
 	tx, err := l.db.Db.Begin()
 	if err != nil {
 		return newKey, fmt.Errorf("l.db.GetTx(ctx). %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
 	// get current highest seed version
 	highestSeedVersion := uint64(0)
@@ -250,7 +253,7 @@ func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint64, amounts []uint64, exp
 	}
 	slog.Debug("Finding highest current version of seed")
 	for i, seed := range seeds {
-		if uint64(highestSeedVersion) <= seed.Version {
+		if highestSeedVersion <= seed.Version {
 			highestSeedVersion = seed.Version + uint64(1)
 		}
 
@@ -325,7 +328,7 @@ func (l *Signer) SignBlindMessages(messages goNutsCashu.BlindedMessages) (goNuts
 	for _, output := range messages {
 		keyset, keysetExits := l.store.GetIndex(output.Id)
 		if !keysetExits {
-			return nil, fmt.Errorf("Keyset does not exists: Id: %+v", output.Id)
+			return nil, fmt.Errorf("keyset does not exist: Id: %+v", output.Id)
 		}
 		_, exists := indexesForGeneration[output.Id]
 		if !exists {
@@ -335,7 +338,7 @@ func (l *Signer) SignBlindMessages(messages goNutsCashu.BlindedMessages) (goNuts
 		if amountExists {
 			indexesForGeneration[output.Id][output.Amount] = i
 		} else {
-			return nil, fmt.Errorf("No index was found for this amount: %+v", output.Amount)
+			return nil, fmt.Errorf("no index was found for this amount: %+v", output.Amount)
 		}
 	}
 
@@ -397,7 +400,7 @@ func (l *Signer) VerifyProofs(proofs goNutsCashu.Proofs, blindMessages goNutsCas
 	for _, proof := range proofs {
 		keyset, keysetExits := l.store.GetIndex(proof.Id)
 		if !keysetExits {
-			return fmt.Errorf("Keyset does not exists: Id: %+v", proof.Id)
+			return fmt.Errorf("keyset does not exist: Id: %+v", proof.Id)
 		}
 		_, exists := indexesForGeneration[proof.Id]
 		if !exists {
@@ -407,7 +410,7 @@ func (l *Signer) VerifyProofs(proofs goNutsCashu.Proofs, blindMessages goNutsCas
 		if amountExists {
 			indexesForGeneration[proof.Id][proof.Amount] = i
 		} else {
-			return fmt.Errorf("No index was found for this amount: %+v", proof.Amount)
+			return fmt.Errorf("no index was found for this amount: %+v", proof.Amount)
 		}
 	}
 
@@ -459,12 +462,13 @@ func (l *Signer) validateProof(keysets map[string]MintKeyset, proof goNutsCashu.
 	nut10Secret, err := nut10.DeserializeSecret(proof.Secret)
 	if err == nil {
 		slog.Debug("Checking if the proof is locked")
-		if nut10Secret.Kind == nut10.P2PK {
+		switch nut10Secret.Kind {
+		case nut10.P2PK:
 			slog.Debug("Proof locked to P2PK")
 			if err := verifyP2PKLockedProof(proof, nut10Secret); err != nil {
 				return fmt.Errorf("verifyP2PKLockedProof(proof, nut10Secret); err != nil : %w %w", cashu.ErrInvalidProof, err)
 			}
-		} else if nut10Secret.Kind == nut10.HTLC {
+		case nut10.HTLC:
 			slog.Debug("Proof locked to HTLC")
 			if err := verifyHTLCProof(proof, nut10Secret); err != nil {
 				return fmt.Errorf("verifyP2PKLockedProof(proof, nut10Secret); err != nil ; err != nil : %w %w", cashu.ErrInvalidProof, err)

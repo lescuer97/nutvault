@@ -9,10 +9,10 @@ import (
 // KeysetStore groups keysets, active keysets and indexes with a mutex
 // and provides concurrency-safe accessors.
 type KeysetStore struct {
-	mu            sync.RWMutex
 	keysets       map[string]MintPublicKeyset
 	activeKeysets map[string]MintPublicKeyset
 	indexes       KeysetGenerationIndexes
+	mu            sync.RWMutex
 }
 
 func NewKeysetStore() *KeysetStore {

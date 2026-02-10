@@ -39,8 +39,8 @@ func DeriveKeysetId(keysets []*secp256k1.PublicKey) (string, error) {
 }
 
 type pubkeyWithAmount struct {
-	Amount uint64
 	Pubkey *secp256k1.PublicKey
+	Amount uint64
 }
 
 func sortPubkeyMapToOrganizedArray(pubkeyMap map[uint64]*secp256k1.PublicKey) []pubkeyWithAmount {
@@ -92,14 +92,14 @@ func DeriveKeysetIdV2(pubKeysMap map[uint64]*secp256k1.PublicKey, unit string, f
 
 func convertPubkeysMapToOrderArray(raw map[uint64]*secp256k1.PublicKey) []*secp256k1.PublicKey {
 	arrays := []struct {
-		Amount uint64
 		Pubkey *secp256k1.PublicKey
+		Amount uint64
 	}{}
 	for amount, pubkey := range raw {
 
 		arrays = append(arrays, struct {
-			Amount uint64
 			Pubkey *secp256k1.PublicKey
+			Amount uint64
 		}{
 			Amount: amount,
 			Pubkey: pubkey,
@@ -238,7 +238,7 @@ func KeyDerivation(key *hdkeychain.ExtendedKey, keyset *MintKeyset, seed databas
 	}
 	unitInteger := ParseUnitToIntegerReference(unit)
 
-	unitKey, err := peanutKey.Derive(hdkeychain.HardenedKeyStart + uint32(unitInteger))
+	unitKey, err := peanutKey.Derive(hdkeychain.HardenedKeyStart + unitInteger)
 	if err != nil {
 		return fmt.Errorf("mintKey.NewChildKey(uint32(unit.EnumIndex())). %w", err)
 	}

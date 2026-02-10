@@ -12,8 +12,8 @@ const masterKey = "master-key"
 const SchemaName = "org.app.Nutvault"
 
 var (
-	ErrNotFound    = errors.New("Could not found value in keystore")
-	SchemaNotSetup = errors.New("Main schema was not setup you need that first")
+	ErrNotFound       = errors.New("could not find value in keystore")
+	ErrSchemaNotSetup = errors.New("main schema was not setup you need that first")
 )
 
 var mainSchema *goLibSecret.Schema
@@ -43,12 +43,12 @@ func getNutmixSignerKey() (string, error) {
 }
 
 func StoreSeedPhrase(mnemonic string) error {
-	return setSecret(masterKey,mnemonic)
+	return setSecret(masterKey, mnemonic)
 }
 
 func setSecret(id string, secret string) error {
 	if mainSchema == nil {
-		return SchemaNotSetup
+		return ErrSchemaNotSetup
 	}
 
 	attr := map[string]string{
@@ -60,10 +60,10 @@ func setSecret(id string, secret string) error {
 
 func getSecret(id string) (string, error) {
 	if mainSchema == nil {
-		return "", SchemaNotSetup
+		return "", ErrSchemaNotSetup
 	}
 	attrs := goLibSecret.NewAttributes()
-	attrs.Set("key", id)
+	_ = attrs.Set("key", id)
 
 	val, err := goLibSecret.PasswordLookupSync(mainSchema, attrs)
 	if err != nil {

@@ -15,7 +15,9 @@ func TestSeedRotation(t *testing.T) {
 	if err != nil {
 		t.Fatalf(`database.DatabaseSetup(ctx, "migrations"). %+v`, err)
 	}
-	defer sqlite.Db.Close()
+	defer func() {
+		_ = sqlite.Db.Close()
+	}()
 
 	seed := Seed{
 		Active:      true,
@@ -32,7 +34,9 @@ func TestSeedRotation(t *testing.T) {
 	if err != nil {
 		t.Fatalf(`sqlite.Db.Begin(). %+v`, err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
 	err = sqlite.SaveNewSeed(tx, seed)
 	if err != nil {
@@ -88,9 +92,11 @@ func TestSeedRotation2(t *testing.T) {
 	if err != nil {
 		t.Fatalf(`database.DatabaseSetup(ctx, "migrations"). %+v`, err)
 	}
-	defer sqlite.Db.Close()
+	defer func() {
+		_ = sqlite.Db.Close()
+	}()
 
-	seeds, err := sqlite.GetAllSeeds()
+	_, err = sqlite.GetAllSeeds()
 	if err != nil {
 		t.Errorf(`sqlite.GetAllSeeds(). %+v`, err)
 	}
@@ -110,7 +116,9 @@ func TestSeedRotation2(t *testing.T) {
 	if err != nil {
 		t.Fatalf(`sqlite.Db.Begin(). %+v`, err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
 	err = sqlite.SaveNewSeed(tx, seed)
 	if err != nil {
@@ -122,7 +130,7 @@ func TestSeedRotation2(t *testing.T) {
 		t.Fatalf(`Could not commit transaction. %+v`, err)
 	}
 
-	seeds, err = sqlite.GetAllSeeds()
+	seeds, err := sqlite.GetAllSeeds()
 	if err != nil {
 		t.Errorf(`sqlite.GetAllSeeds(). %+v`, err)
 	}

@@ -34,7 +34,7 @@ func MakeSureFilePathExists(dirPath string, filename string) error {
 	_, err := os.Stat(dirPath)
 
 	if os.IsNotExist(err) {
-		err = os.MkdirAll(dirPath, 0764)
+		err = os.MkdirAll(dirPath, 0750)
 		if err != nil {
 			return fmt.Errorf("os.MkdirAll(pathToProjectDir, 0764) %w", err)
 		}
@@ -53,7 +53,7 @@ func MakeSureFilePathExists(dirPath string, filename string) error {
 
 }
 
-func GetTlsSecurityCredential() (credentials.TransportCredentials, error) {
+func GetTlsSecurityCredential() credentials.TransportCredentials {
 	// Load server certificate and key
 	serverCert, err := tls.LoadX509KeyPair("tls/server-cert.pem", "tls/server-key.pem")
 	if err != nil {
@@ -74,6 +74,7 @@ func GetTlsSecurityCredential() (credentials.TransportCredentials, error) {
 
 	// Create TLS configuration
 	tlsConfig := &tls.Config{
+		MinVersion:   tls.VersionTLS12,
 		Certificates: []tls.Certificate{serverCert},
 		ClientAuth:   tls.RequireAndVerifyClientCert, // Require client certificate
 		ClientCAs:    certPool,                       // Verify client certificate against this CA
@@ -81,6 +82,6 @@ func GetTlsSecurityCredential() (credentials.TransportCredentials, error) {
 
 	// Create the TLS credentials
 	creds := credentials.NewTLS(tlsConfig)
-	return creds, nil
+	return creds
 
 }

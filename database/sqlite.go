@@ -18,15 +18,15 @@ import (
 )
 
 type Seed struct {
-	Active      bool
-	CreatedAt   int64
-	Version     uint64
+	FinalExpiry *time.Time `db:"final_expiry"`
 	Unit        string
 	Id          string
+	Amounts     []uint64 `db:"amounts"`
+	CreatedAt   int64
+	Version     uint64
 	InputFeePpk uint `json:"input_fee_ppk" db:"input_fee_ppk"`
+	Active      bool
 	Legacy      bool
-	Amounts     []uint64   `db:"amounts"`
-	FinalExpiry *time.Time `db:"final_expiry"`
 }
 
 type SqliteDB struct {
@@ -68,13 +68,17 @@ func (sq *SqliteDB) GetAllSeeds() ([]Seed, error) {
 	if err != nil {
 		return seeds, fmt.Errorf(`SELECT created_at, active, version, unit, id, "input_fee_ppk", legacy, max_order, final_expiry FROM seeds ORDER BY version DESC %w`, err)
 	}
-	defer stmt.Close()
+	defer func() {
+		_ = stmt.Close()
+	}()
 
 	rows, err := stmt.Query()
 	if err != nil {
 		return seeds, fmt.Errorf(`stmt.Query(args...). %w`, err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	for rows.Next() {
 		var seed Seed
@@ -106,7 +110,9 @@ func (sq *SqliteDB) GetSeedsByUnit(tx *sql.Tx, unit cashu.Unit) ([]Seed, error) 
 	if err != nil {
 		return seeds, fmt.Errorf(`tx.Prepare("SELECT created_at, active, version, unit, id, input_fee_ppk, legacy, max_order FROM seeds WHERE unit = $1"). %w`, err)
 	}
-	defer stmt.Close()
+	defer func() {
+		_ = stmt.Close()
+	}()
 
 	rows, err := stmt.Query(strings.ToUpper(unit.String()))
 	if err != nil {
@@ -115,7 +121,9 @@ func (sq *SqliteDB) GetSeedsByUnit(tx *sql.Tx, unit cashu.Unit) ([]Seed, error) 
 		}
 		return seeds, fmt.Errorf(`stmt.Query(args...). %w`, err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	for rows.Next() {
 		var seed Seed
@@ -177,7 +185,9 @@ func (sq *SqliteDB) UpdateSeedsActiveStatus(tx *sql.Tx, seeds []Seed) error {
 	if err != nil {
 		return fmt.Errorf("UPDATE seeds SET active = ? WHERE id = ?: %w", err)
 	}
-	defer stmt.Close()
+	defer func() {
+		_ = stmt.Close()
+	}()
 
 	for _, seed := range seeds {
 		// Exec with consistent field naming

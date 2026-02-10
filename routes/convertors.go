@@ -105,17 +105,17 @@ func ConvertToKeyRotationResponse(key signer.MintPublicKeyset) *sig.KeyRotationR
 }
 
 type RotationRequest struct {
-	Fee         uint64
-	Unit        cashu.Unit
-	Amounts     []uint64
 	FinalExpiry *uint64
+	Amounts     []uint64
+	Unit        cashu.Unit
+	Fee         uint64
 }
 
 func ConvertSigRotationRequest(req *sig.RotationRequest) (RotationRequest, error) {
 	rotationRequest := RotationRequest{}
 
 	if req == nil {
-		return rotationRequest, fmt.Errorf("No rotation request available")
+		return rotationRequest, fmt.Errorf("no rotation request available")
 	}
 	rotationRequest.Fee = req.InputFeePpk
 	rotationRequest.Amounts = req.Amounts

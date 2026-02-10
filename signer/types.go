@@ -14,25 +14,25 @@ import (
 type MintPublicKeyset struct {
 	Id                []byte
 	Unit              string
-	Active            bool
-	DerivationPathIdx uint32
 	Keys              map[uint64][]byte
-	InputFeePpk       uint
-	Legacy            bool
-	Version           uint64
 	FinalExpiry       *time.Time
 	Amounts           []uint64
+	Version           uint64
+	InputFeePpk       uint
+	DerivationPathIdx uint32
+	Active            bool
+	Legacy            bool
 }
 type MintKeyset struct {
 	Id                []byte
 	Unit              string
-	Active            bool
-	DerivationPathIdx uint32
 	Keys              map[uint64]crypto.KeyPair
-	InputFeePpk       uint
-	Version           uint64
 	FinalExpiry       *time.Time
 	Amounts           []uint64
+	Version           uint64
+	InputFeePpk       uint
+	DerivationPathIdx uint32
+	Active            bool
 }
 
 func MakeMintPublickeys(mintKey MintKeyset) MintPublicKeyset {
@@ -42,7 +42,7 @@ func MakeMintPublickeys(mintKey MintKeyset) MintPublicKeyset {
 		Active:            mintKey.Active,
 		DerivationPathIdx: mintKey.DerivationPathIdx,
 		Keys:              make(map[uint64][]byte, len(mintKey.Keys)),
-		InputFeePpk:       uint(mintKey.InputFeePpk),
+		InputFeePpk:       mintKey.InputFeePpk,
 		Version:           mintKey.Version,
 		FinalExpiry:       mintKey.FinalExpiry,
 		Amounts:           mintKey.Amounts,

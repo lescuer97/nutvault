@@ -31,11 +31,13 @@ func main() {
 		log.Panicf(`utils.GetRastaskerHomeDirectory(). %+v`, err)
 	}
 
-	logFile, err := os.OpenFile(homeDir+"logs", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0764)
+	logFile, err := os.OpenFile(homeDir+"logs", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0600)
 	if err != nil {
 		log.Panicf("os.OpenFile(pathToProjectLogFile, os.O_RDWR|os.O_CREATE, 0764) %+v", err)
 	}
-	defer logFile.Close()
+	defer func() {
+		_ = logFile.Close()
+	}()
 
 	w := io.MultiWriter(os.Stdout, logFile)
 
@@ -56,7 +58,9 @@ func main() {
 	if err != nil {
 		log.Panicf(`database.DatabaseSetup(ctx, "migrations"). %+v`, err)
 	}
-	defer sqlite.Db.Close()
+	defer func() {
+		_ = sqlite.Db.Close()
+	}()
 
 	// get expirty time from env var if not use default
 	var expiryTime *time.Time
@@ -93,6 +97,7 @@ func main() {
 	if os.Getenv("NETWORK") == "true" {
 		// Create Unix listener
 		slog.Info("Listening on network socket", slog.String("port", ":1721"))
+		//nolint:gosec
 		listener, err = net.Listen("tcp", ":1721")
 		if err != nil {
 			log.Fatal("Error creating Unix socket:", err)
@@ -107,7 +112,7 @@ func main() {
 
 	}
 
-	creds, err := GetTlsSecurityCredential()
+	creds := GetTlsSecurityCredential()
 	if err != nil {
 		log.Fatalf("Error creating Unix socket: %+v", err)
 	}

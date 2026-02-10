@@ -18,8 +18,6 @@ import (
 	"github.com/lescuer97/nutmix/api/cashu"
 )
 
-const mintPrivateKey string = "0000000000000000000000000000000000000000000000000000000000000001"
-
 func TestConvertionOfBytesToInt(t *testing.T) {
 	hexStr := "339efeab"
 	bytes, err := hex.DecodeString(hexStr)
@@ -182,7 +180,7 @@ func TestDeriveKeysetSat(t *testing.T) {
 			t.Errorf("key values should be the same: \n CalculatedKey %x. \n NeededKey %v", keys.PublicKey.SerializeCompressed(), val)
 		}
 	}
-	if hex.EncodeToString(mintKeyset.Id) != "00b5a0580f75cc2f" {
+	if hex.EncodeToString(mintKeyset.Id) != "00d4119196b8d6a2" {
 		t.Errorf("id was incorrect. %x", mintKeyset.Id)
 	}
 }
