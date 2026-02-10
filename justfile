@@ -23,6 +23,10 @@ seed:
 dev: proto
   go run .
 
+# Run tests
+test:
+  go test ./...
+
 # Build and run the signer
 run: build
   ./{{BINARY_NAME}}

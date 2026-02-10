@@ -3,3 +3,5 @@
 tls/
 main
 build-errors.log
+
+nutmix_remote_signer

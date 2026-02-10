@@ -105,10 +105,11 @@ func ConvertToKeyRotationResponse(key signer.MintPublicKeyset) *sig.KeyRotationR
 }
 
 type RotationRequest struct {
-	FinalExpiry *uint64
-	Amounts     []uint64
-	Unit        cashu.Unit
-	Fee         uint64
+	FinalExpiry  *uint64
+	Amounts      []uint64
+	Unit         cashu.Unit
+	Fee          uint64
+	KeysetIdType sig.KeysetVersion
 }
 
 func ConvertSigRotationRequest(req *sig.RotationRequest) (RotationRequest, error) {
@@ -120,6 +121,7 @@ func ConvertSigRotationRequest(req *sig.RotationRequest) (RotationRequest, error
 	rotationRequest.Fee = req.InputFeePpk
 	rotationRequest.Amounts = req.Amounts
 	rotationRequest.FinalExpiry = req.FinalExpiry
+	rotationRequest.KeysetIdType = req.GetKeysetIdType()
 
 	unit, err := ConvertSigUnitToCashuUnit(req.Unit)
 	if err != nil {
