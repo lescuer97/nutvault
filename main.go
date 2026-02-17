@@ -100,22 +100,21 @@ func main() {
 		//nolint:gosec
 		listener, err = net.Listen("tcp", ":1721")
 		if err != nil {
-			log.Fatal("Error creating Unix socket:", err)
+			slog.Error("Error creating Unix socket:", slog.Any("error", err))
+			return
 		}
 	} else {
 		// Create Unix listener
 		slog.Info("Listening on abstract socket", slog.String("port", abstractSocket))
 		listener, err = net.Listen("unix", abstractSocket)
 		if err != nil {
-			log.Fatal("Error creating Unix socket:", err)
+			slog.Error("Error creating Unix socket:", slog.Any("error", err))
+			return
 		}
 
 	}
 
 	creds := GetTlsSecurityCredential()
-	if err != nil {
-		log.Fatalf("Error creating Unix socket: %+v", err)
-	}
 
 	// Create a new gRPC server
 	s := grpc.NewServer(grpc.Creds(creds))
@@ -127,6 +126,7 @@ func main() {
 
 	// Serve gRPC requests
 	if err := s.Serve(listener); err != nil {
-		log.Fatalf("Failed to serve: %v", err)
+		slog.Error("failed to serve:", slog.Any("error", err))
+		return
 	}
 }

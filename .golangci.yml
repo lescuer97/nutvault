@@ -18,6 +18,7 @@ linters:
     - govet           # Reports suspicious constructs
     - errcheck        # Unchecked errors
     - ineffassign     # Detects unused assignments
+    - gocritic
     
     # Code quality
     # - revive          # Fast, extensible linter
