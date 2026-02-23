@@ -73,6 +73,7 @@ func GetTlsSecurityCredential() credentials.TransportCredentials {
 	}
 
 	// Create TLS configuration
+	// nolint:exhaustruct
 	tlsConfig := &tls.Config{
 		MinVersion:   tls.VersionTLS12,
 		Certificates: []tls.Certificate{serverCert},

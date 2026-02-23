@@ -36,8 +36,9 @@ type Signer struct {
 
 func SetupLocalSigner(db database.SqliteDB, config Config) (Signer, error) {
 	signer := Signer{
-		db:    db,
-		store: NewKeysetStore(),
+		db:     db,
+		store:  NewKeysetStore(),
+		pubkey: nil,
 	}
 
 	err := SetupKeychain()
@@ -207,6 +208,7 @@ func (l *Signer) createNewSeed(mintPrivateKey *hdkeychain.ExtendedKey, unit cash
 		Legacy:      false,
 		Amounts:     amounts,
 		FinalExpiry: expiry_time,
+		Id:          "",
 	}
 
 	keyset, err := DeriveKeyset(mintPrivateKey, newSeed)
@@ -234,7 +236,18 @@ func (l *Signer) createNewSeed(mintPrivateKey *hdkeychain.ExtendedKey, unit cash
 
 func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint64, amounts []uint64, expiry_time *time.Time) (MintPublicKeyset, error) {
 	slog.Info("Rotating keyset", slog.String("unit", unit.String()), slog.String("fee", strconv.FormatUint(fee, 10)))
-	newKey := MintPublicKeyset{}
+	newKey := MintPublicKeyset{
+		Id:                nil,
+		Unit:              "",
+		Keys:              nil,
+		FinalExpiry:       nil,
+		Amounts:           nil,
+		Version:           0,
+		InputFeePpk:       0,
+		DerivationPathIdx: 0,
+		Active:            false,
+		Legacy:            false,
+	}
 
 	tx, err := l.db.Db.Begin()
 	if err != nil {
@@ -378,6 +391,7 @@ func (l *Signer) SignBlindMessages(messages goNutsCashu.BlindedMessages) (goNuts
 		dleq := goNutsCashu.DLEQProof{
 			E: hex.EncodeToString(E.Serialize()),
 			S: hex.EncodeToString(S.Serialize()),
+			R: "",
 		}
 
 		blindedSignatures = append(blindedSignatures,

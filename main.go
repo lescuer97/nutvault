@@ -42,7 +42,9 @@ func main() {
 	w := io.MultiWriter(os.Stdout, logFile)
 
 	opts := &slog.HandlerOptions{
-		Level: slog.LevelInfo,
+		Level:       slog.LevelInfo,
+		AddSource:   false,
+		ReplaceAttr: nil,
 	}
 
 	if os.Getenv("DEBUG") == "true" {
@@ -121,7 +123,8 @@ func main() {
 
 	// Register the service
 	sig.RegisterSignatoryServer(s, &routes.Server{
-		Signer: signer,
+		Signer:          signer,
+		SignatoryServer: nil,
 	})
 
 	// Serve gRPC requests

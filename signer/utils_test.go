@@ -84,6 +84,7 @@ func TestDeriveKeysetSat(t *testing.T) {
 		InputFeePpk: 0,
 		Legacy:      false,
 		Amounts:     GetAmountsFromMaxOrder(DefaultMaxOrder),
+		FinalExpiry: nil,
 	}
 	privateKeyBytes, err := hex.DecodeString(MintPrivateKey)
 	if err != nil {
@@ -195,6 +196,7 @@ func TestDeriveKeysetAuth(t *testing.T) {
 		InputFeePpk: 0,
 		Legacy:      false,
 		Amounts:     []uint64{1},
+		FinalExpiry: nil,
 	}
 	privateKeyBytes, err := hex.DecodeString(MintPrivateKey)
 	if err != nil {
@@ -489,6 +491,7 @@ func TestKeysetIdGenerationV2Vector3(t *testing.T) {
 }
 
 func TestCollisionOfUnitError(t *testing.T) {
+	// nolint:exhaustruct
 	keysets := []MintPublicKeyset{{Unit: "SAT"}}
 	err := unitStringCollissionCheck(keysets, "sW8W2A_hTH_gapj1_vj5suO3JI_")
 

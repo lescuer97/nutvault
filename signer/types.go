@@ -46,6 +46,7 @@ func MakeMintPublickeys(mintKey MintKeyset) MintPublicKeyset {
 		Version:           mintKey.Version,
 		FinalExpiry:       mintKey.FinalExpiry,
 		Amounts:           mintKey.Amounts,
+		Legacy:            false,
 	}
 
 	for key, keypair := range mintKey.Keys {
@@ -79,10 +80,12 @@ func (s *Signer) GenerateMintKeysFromPublicKeysets(keysetIndex KeysetGenerationI
 		}
 
 		hexId := hex.EncodeToString(val.Id)
-		privateKeysets[i] = MintKeyset{Id: val.Id, Unit: val.Unit, DerivationPathIdx: val.DerivationPathIdx, Active: val.Active, InputFeePpk: val.InputFeePpk, FinalExpiry: val.FinalExpiry}
-		keyset := MintKeyset{Id: val.Id, Unit: val.Unit, DerivationPathIdx: val.DerivationPathIdx, Active: val.Active, InputFeePpk: val.InputFeePpk, Keys: make(map[uint64]crypto.KeyPair), FinalExpiry: val.FinalExpiry}
+		privateKeysets[i] = MintKeyset{Id: val.Id, Unit: val.Unit, DerivationPathIdx: val.DerivationPathIdx, Active: val.Active, InputFeePpk: val.InputFeePpk, FinalExpiry: val.FinalExpiry, Amounts: nil, Version: 0, Keys: nil}
+		keyset := MintKeyset{Id: val.Id, Unit: val.Unit, DerivationPathIdx: val.DerivationPathIdx, Active: val.Active, InputFeePpk: val.InputFeePpk, Keys: make(map[uint64]crypto.KeyPair), FinalExpiry: val.FinalExpiry, Amounts: nil, Version: 0}
 
-		seed := database.Seed{Active: val.Active, Id: hexId, Unit: val.Unit, Version: uint64(val.DerivationPathIdx), InputFeePpk: val.InputFeePpk, Legacy: false}
+
+		seed := database.Seed{Active: val.Active, Id: hexId, Unit: val.Unit, Version: uint64(val.DerivationPathIdx), InputFeePpk: val.InputFeePpk, Legacy: false, FinalExpiry: nil, Amounts: nil, CreatedAt: 0}
+		// FIXME: dont pass the key by reference but retuned them 
 		err := KeyDerivation(masterKey, &keyset, seed, val.Unit, keysetAmounts)
 		if err != nil {
 			return privateKeysets, fmt.Errorf("KeyDerivation(mintKey,&keyset, seed, unit) %w", err)

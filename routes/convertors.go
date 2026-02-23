@@ -14,7 +14,9 @@ import (
 
 func ConvertUnitToSigUnit(unit string) *sig.CurrencyUnit {
 
-	currUnit := sig.CurrencyUnit{}
+	currUnit := sig.CurrencyUnit{
+		CurrencyUnit: nil,
+	}
 
 	switch strings.ToLower(unit) {
 	case "sat":
@@ -38,15 +40,20 @@ func ConvertToKeysResponse(pubkey []byte, keys []signer.MintPublicKeyset) *sig.K
 	response := sig.KeysResponse{
 		Keysets: &sig.SignatoryKeysets{
 			Keysets: make([]*sig.KeySet, len(keys)),
+			Pubkey:  pubkey,
 		},
+		Error: nil,
 	}
-
-	response.Keysets.Pubkey = pubkey
 	for i, mintPubKey := range keys {
 		keys := sig.Keys{
 			Keys: mintPubKey.Keys,
 		}
 		currUnit := ConvertUnitToSigUnit(mintPubKey.Unit)
+		var finalExpiry *uint64
+		if mintPubKey.FinalExpiry != nil {
+			timestamp := uint64(mintPubKey.FinalExpiry.Unix())
+			finalExpiry = &timestamp
+		}
 		keyset := sig.KeySet{
 			Id:          mintPubKey.Id,
 			Unit:        currUnit,
@@ -54,10 +61,7 @@ func ConvertToKeysResponse(pubkey []byte, keys []signer.MintPublicKeyset) *sig.K
 			InputFeePpk: uint64(mintPubKey.InputFeePpk),
 			Keys:        &keys,
 			Version:     uint32(mintPubKey.Version),
-		}
-		if mintPubKey.FinalExpiry != nil {
-			timestamp := uint64(mintPubKey.FinalExpiry.Unix())
-			keyset.FinalExpiry = &timestamp
+			FinalExpiry: finalExpiry,
 		}
 
 		if keyset.Keys == nil {
@@ -73,12 +77,17 @@ func ConvertToKeysResponse(pubkey []byte, keys []signer.MintPublicKeyset) *sig.K
 	return &response
 }
 func ConvertToKeyRotationResponse(key signer.MintPublicKeyset) *sig.KeyRotationResponse {
-	response := sig.KeyRotationResponse{}
-
 	keys := sig.Keys{
 		Keys: key.Keys,
 	}
 	currUnit := ConvertUnitToSigUnit(key.Unit)
+
+	var finalExpiry *uint64
+	if key.FinalExpiry != nil {
+		timestamp := uint64(key.FinalExpiry.Unix())
+		finalExpiry = &timestamp
+	}
+
 	keyset := sig.KeySet{
 		Id:          key.Id,
 		Unit:        currUnit,
@@ -86,11 +95,7 @@ func ConvertToKeyRotationResponse(key signer.MintPublicKeyset) *sig.KeyRotationR
 		InputFeePpk: uint64(key.InputFeePpk),
 		Keys:        &keys,
 		Version:     uint32(key.Version),
-	}
-
-	if key.FinalExpiry != nil {
-		timestamp := uint64(key.FinalExpiry.Unix())
-		keyset.FinalExpiry = &timestamp
+		FinalExpiry: finalExpiry,
 	}
 
 	if keyset.Keys == nil {
@@ -99,7 +104,11 @@ func ConvertToKeyRotationResponse(key signer.MintPublicKeyset) *sig.KeyRotationR
 	if keyset.Id == nil {
 		log.Panicf("Id should always be set")
 	}
-	response.Keyset = &keyset
+
+	response := sig.KeyRotationResponse{
+		Error:  nil,
+		Keyset: &keyset,
+	}
 
 	return &response
 }
@@ -113,15 +122,17 @@ type RotationRequest struct {
 }
 
 func ConvertSigRotationRequest(req *sig.RotationRequest) (RotationRequest, error) {
-	rotationRequest := RotationRequest{}
 
 	if req == nil {
-		return rotationRequest, fmt.Errorf("no rotation request available")
+		return RotationRequest{}, fmt.Errorf("no rotation request available")
 	}
-	rotationRequest.Fee = req.InputFeePpk
-	rotationRequest.Amounts = req.Amounts
-	rotationRequest.FinalExpiry = req.FinalExpiry
-	rotationRequest.KeysetIdType = req.GetKeysetIdType()
+	rotationRequest := RotationRequest{
+		FinalExpiry:  req.FinalExpiry,
+		Amounts:      req.Amounts,
+		Unit:         cashu.Sat,
+		Fee:          req.InputFeePpk,
+		KeysetIdType: req.GetKeysetIdType(),
+	}
 
 	unit, err := ConvertSigUnitToCashuUnit(req.Unit)
 	if err != nil {
@@ -165,7 +176,10 @@ func ConvertErrorToResponse(err error) *sig.Error {
 	}
 
 	// Create error response
-	error := sig.Error{}
+	error := sig.Error{
+		Code:   0,
+		Detail: "",
+	}
 
 	switch {
 	case errors.Is(err, cashu.UsingInactiveKeyset):

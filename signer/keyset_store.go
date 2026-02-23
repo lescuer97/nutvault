@@ -20,6 +20,7 @@ func NewKeysetStore() *KeysetStore {
 		keysets:       make(map[string]MintPublicKeyset),
 		activeKeysets: make(map[string]MintPublicKeyset),
 		indexes:       make(KeysetGenerationIndexes),
+		mu:            sync.RWMutex{},
 	}
 }
 

@@ -28,6 +28,7 @@ func TestSeedRotation(t *testing.T) {
 		Legacy:      false,
 		Amounts:     []uint64{1, 2, 4},
 		CreatedAt:   2,
+		FinalExpiry: nil,
 	}
 
 	tx, err := sqlite.Db.Begin()
@@ -58,6 +59,7 @@ func TestSeedRotation(t *testing.T) {
 		Legacy:      false,
 		Amounts:     []uint64{1, 2, 4},
 		CreatedAt:   2,
+		FinalExpiry: nil,
 	}
 
 	err = sqlite.SaveNewSeed(tx, seed2)
@@ -110,6 +112,7 @@ func TestSeedRotation2(t *testing.T) {
 		Legacy:      false,
 		Amounts:     []uint64{1, 2, 4},
 		CreatedAt:   2,
+		FinalExpiry: nil,
 	}
 
 	tx, err := sqlite.Db.Begin()

@@ -122,6 +122,7 @@ func convertPubkeysMapToOrderArray(raw map[uint64]*secp256k1.PublicKey) []*secp2
 
 func DeriveKeyset(mintKey *hdkeychain.ExtendedKey, seed database.Seed) (MintKeyset, error) {
 	keyset := MintKeyset{
+		Id: nil,
 		Unit:              seed.Unit,
 		InputFeePpk:       seed.InputFeePpk,
 		Active:            seed.Active,
@@ -231,6 +232,7 @@ func ParseUnitToIntegerReference(unit string) uint32 {
 	return unitInteger &^ (1 << 31)
 }
 
+		// FIXME: dont pass the key by reference but retuned them and plug the keyset keys to the struct
 func KeyDerivation(key *hdkeychain.ExtendedKey, keyset *MintKeyset, seed database.Seed, unit string, amounts KeysetAmounts) error {
 	peanutKey, err := key.Derive(hdkeychain.HardenedKeyStart + PeanutUTF8)
 	if err != nil {

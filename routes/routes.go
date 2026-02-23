@@ -27,12 +27,15 @@ func (s *Server) BlindSign(ctx context.Context, message *sig.BlindedMessages) (*
 
 	blindMessages := goNutsCashu.BlindedMessages{}
 	for _, val := range message.BlindedMessages {
-		blindMessages = append(blindMessages, goNutsCashu.BlindedMessage{Amount: val.Amount, Id: hex.EncodeToString(val.KeysetId), B_: hex.EncodeToString(val.BlindedSecret)})
+		blindMessages = append(blindMessages, goNutsCashu.BlindedMessage{Amount: val.Amount, Id: hex.EncodeToString(val.KeysetId), B_: hex.EncodeToString(val.BlindedSecret), Witness: ""})
 	}
 
 	blindSigs, err := s.Signer.SignBlindMessages(blindMessages)
 
-	blindSigsResponse := sig.BlindSignResponse{}
+	blindSigsResponse := sig.BlindSignResponse{
+		Error: nil,
+		Sigs:  nil,
+	}
 	if err != nil {
 		slog.Error(err.Error())
 		if mappedErr := ConvertErrorToResponse(err); mappedErr != nil {
@@ -97,11 +100,14 @@ func (s *Server) VerifyProofs(ctx context.Context, proofs *sig.Proofs) (*sig.Boo
 	cashuProofs := goNutsCashu.Proofs{}
 	slog.Debug("Parsing grpc proofs to signer types")
 	for _, val := range proofs.Proof {
-		cashuProofs = append(cashuProofs, goNutsCashu.Proof{Amount: val.Amount, Id: hex.EncodeToString(val.KeysetId), C: hex.EncodeToString(val.C), Witness: "", Secret: string(val.Secret)})
+		cashuProofs = append(cashuProofs, goNutsCashu.Proof{Amount: val.Amount, Id: hex.EncodeToString(val.KeysetId), C: hex.EncodeToString(val.C), Witness: "", Secret: string(val.Secret), DLEQ: nil})
 	}
 	err := s.Signer.VerifyProofs(cashuProofs, goNutsCashu.BlindedMessages{})
 
-	boolResponse := sig.BooleanResponse{}
+	boolResponse := sig.BooleanResponse{
+		Error:   nil,
+		Success: false,
+	}
 	if err != nil {
 		slog.Error("Could not verify Proofs", slog.String("extra", err.Error()))
 		if mappedErr := ConvertErrorToResponse(err); mappedErr != nil {
@@ -132,8 +138,10 @@ func (s *Server) RotateKeyset(ctx context.Context, req *sig.RotationRequest) (*s
 	if err != nil {
 		slog.Error("Could not convert the rotation request", slog.String("extra", err.Error()))
 		if mappedErr := ConvertErrorToResponse(err); mappedErr != nil {
-			rotationResponse := sig.KeyRotationResponse{}
-			rotationResponse.Error = mappedErr
+			rotationResponse := sig.KeyRotationResponse{
+				Error:  mappedErr,
+				Keyset: nil,
+			}
 			return &rotationResponse, nil
 		}
 		return nil, fmt.Errorf("ConvertSigRotationRequest(). %w", err)
@@ -154,8 +162,10 @@ func (s *Server) RotateKeyset(ctx context.Context, req *sig.RotationRequest) (*s
 	if err != nil {
 		slog.Error("Could not rotate keysets", slog.String("extra", err.Error()))
 		if mappedErr := ConvertErrorToResponse(err); mappedErr != nil {
-			rotationResponse := sig.KeyRotationResponse{}
-			rotationResponse.Error = mappedErr
+			rotationResponse := sig.KeyRotationResponse{
+				Error:  mappedErr,
+				Keyset: nil,
+			}
 			return &rotationResponse, nil
 		}
 		return nil, fmt.Errorf("s.Signer.RotateKeyset(). %w", err)

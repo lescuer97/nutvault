@@ -19,6 +19,7 @@ linters:
     - errcheck        # Unchecked errors
     - ineffassign     # Detects unused assignments
     - gocritic
+
     
     # Code quality
     # - revive          # Fast, extensible linter
@@ -26,6 +27,7 @@ linters:
     - unconvert       # Unnecessary type conversions
     - unparam         # Unused function parameters
     - misspell        # Commonly misspelled words
+    - exhaustruct # [highly recommend to enable] checks if all structure fields are initialized
 
   settings:
     gosec:
