@@ -119,7 +119,8 @@ func main() {
 	creds := GetTlsSecurityCredential()
 
 	// Create a new gRPC server
-	s := grpc.NewServer(grpc.Creds(creds))
+	s := grpc.NewServer(grpc.Creds(creds),
+		grpc.ChainUnaryInterceptor(routes.SchemaVersion()))
 
 	// Register the service
 	sig.RegisterSignatoryServer(s, &routes.Server{

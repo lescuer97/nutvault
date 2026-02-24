@@ -20,8 +20,8 @@ enum Constants {
 }
 
 message BlindSignResponse {
-  Error error = 1; // @gotags: validate:"required"
-  BlindSignatures sigs = 2; // @gotags: validate:"required"
+  Error error = 1; 
+  BlindSignatures sigs = 2; 
 }
 
 message BlindedMessages {
@@ -36,18 +36,18 @@ message BlindedMessage {
 }
 
 message BooleanResponse {
-  Error error = 1; // @gotags: validate:"required"
-  bool success = 2; // @gotags: validate:"required"
+  Error error = 1; 
+  bool success = 2; 
 }
 
 message KeyRotationResponse {
-  Error error = 1; // @gotags: validate:"required"
-  KeySet keyset = 2; // @gotags: validate:"required"
+  Error error = 1; 
+  KeySet keyset = 2; 
 }
 
 message KeysResponse {
-  Error error = 1; // @gotags: validate:"required"
-  SignatoryKeysets keysets = 2; // @gotags: validate:"required"
+  Error error = 1; 
+  SignatoryKeysets keysets = 2; 
 }
 
 message SignatoryKeysets {
@@ -59,10 +59,10 @@ message KeySet {
   bytes id = 1; // @gotags: validate:"required"
   CurrencyUnit unit = 2; // @gotags: validate:"required"
   bool active = 3; // @gotags: validate:"required"
-  uint64 input_fee_ppk = 4; // @gotags: validate:"required"
+  uint64 input_fee_ppk = 4; 
   Keys keys = 5; // @gotags: validate:"required"
   optional uint64 final_expiry = 6;
-  uint32 version = 7; // @gotags: validate:"required"
+  uint32 version = 7; 
   optional string issuer_version = 8;
 }
 
@@ -77,7 +77,7 @@ enum KeysetVersion {
 }
 message RotationRequest {
   CurrencyUnit unit = 1; // @gotags: validate:"required"
-  uint64 input_fee_ppk = 2; // @gotags: validate:"required"
+  uint64 input_fee_ppk = 2; 
   repeated uint64 amounts = 3; // @gotags: validate:"required"
   optional uint64 final_expiry = 4;
   KeysetVersion keyset_id_type = 5; // @gotags: validate:"required"
@@ -143,7 +143,7 @@ enum ErrorCode {
 
 message Error {
   ErrorCode code = 1; // @gotags: validate:"required"
-  string detail = 2; // @gotags: validate:"required"
+  string detail = 2; 
 }
 
 message EmptyRequest {}

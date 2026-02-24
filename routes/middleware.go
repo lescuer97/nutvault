@@ -4,11 +4,12 @@ import (
 	"context"
 	"strconv"
 
+	sig "nutmix_remote_signer/gen"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	sig "nutmix_remote_signer/gen"
 )
 
 const signatorySchemaVersion = "x-signatory-schema-version"
