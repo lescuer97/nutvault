@@ -72,7 +72,7 @@ func generateKeysetV2Preimage(sortedPubkeyArray []pubkeyWithAmount, unit string,
 		}
 	}
 
-	preimage += fmt.Sprintf("|unit:%s", unit)
+	preimage += fmt.Sprintf("|unit:%s", strings.ToLower(unit))
 	if fee > 0 {
 		preimage += fmt.Sprintf("|input_fee_ppk:%v", fee)
 	}
@@ -122,12 +122,17 @@ func convertPubkeysMapToOrderArray(raw map[uint64]*secp256k1.PublicKey) []*secp2
 }
 
 func DeriveKeyset(mintKey *hdkeychain.ExtendedKey, seed database.Seed) (MintKeyset, error) {
+	paths, err := getDerivationSteps(seed.DerivationPath)
+	if err != nil {
+		return MintKeyset{}, fmt.Errorf("getDerivationSteps(path) %w", err)
+	}
 	keyset := MintKeyset{
 		Id:                nil,
 		Unit:              seed.Unit,
 		InputFeePpk:       seed.InputFeePpk,
 		Active:            seed.Active,
 		DerivationPathIdx: uint32(seed.Version),
+		DerivationPath:    paths,
 		Keys:              make(map[uint64]crypto.KeyPair),
 		Amounts:           seed.Amounts,
 		Version:           seed.Version,
@@ -151,11 +156,7 @@ func DeriveKeyset(mintKey *hdkeychain.ExtendedKey, seed database.Seed) (MintKeys
 		}
 		keys = keyset.Keys
 	} else {
-		derivationPath := seed.DerivationPath
-		if derivationPath == "" {
-			derivationPath = keyDerivation(uint(seed.Version), unit)
-		}
-		derivedKey, err := deriveKeyFromPath(mintKey, derivationPath)
+		derivedKey, err := deriveKeyFromPath(mintKey, seed.DerivationPath)
 		if err != nil {
 			return keyset, fmt.Errorf("deriveKeyFromPath(mintKey, derivationPath) %w", err)
 		}
@@ -292,27 +293,20 @@ func deriveKeyFromPath(mintKey *hdkeychain.ExtendedKey, path string) (*hdkeychai
 			return nil, fmt.Errorf("mintKey.Derive(paths[i]) %w", err)
 		}
 	}
+	log.Printf("\n mintKey: %+v \n", mintKey.String())
 	return mintKey, nil
 }
 
-func KeyDerivation(key *hdkeychain.ExtendedKey, version uint32, unit string, amounts KeysetAmounts) (map[uint64]crypto.KeyPair, error) {
-	peanutKey, err := key.Derive(hdkeychain.HardenedKeyStart + PeanutUTF8)
-	if err != nil {
-		return nil, fmt.Errorf("mintKey.NewChildKey(uint32(unit.EnumIndex())). %w", err)
-	}
-	unitInteger := ParseUnitToIntegerReference(unit)
-
-	unitKey, err := peanutKey.Derive(hdkeychain.HardenedKeyStart + unitInteger)
-	if err != nil {
-		return nil, fmt.Errorf("mintKey.NewChildKey(uint32(unit.EnumIndex())). %w", err)
+func KeyDerivation(key *hdkeychain.ExtendedKey, derivationPath []uint32, amounts KeysetAmounts) (map[uint64]crypto.KeyPair, error) {
+	var err error
+	for i := range derivationPath {
+		key, err = key.Derive(derivationPath[i])
+		if err != nil {
+			return nil, fmt.Errorf("derivedKey.Derive(paths[i]). %w", err)
+		}
 	}
 
-	versionKey, err := unitKey.Derive(hdkeychain.HardenedKeyStart + version)
-	if err != nil {
-		return nil, fmt.Errorf("mintKey.NewChildKey(uint32(seed.Version)) %w", err)
-	}
-
-	generatedKeys, err := GenerateKeypairs(versionKey, amounts)
+	generatedKeys, err := GenerateKeypairs(key, amounts)
 	if err != nil {
 		return nil, fmt.Errorf(`GenerateKeypairs(versionKey, values, &keyset) %w`, err)
 	}
@@ -400,8 +394,8 @@ func OrderAndTransformAmounts(amounts []uint64) KeysetAmounts {
 
 	// Transform to KeysetAmounts
 	keysetAmounts := make(KeysetAmounts)
-	for index, amount := range amounts {
-		keysetAmounts[amount] = index
+	for index := range amounts {
+		keysetAmounts[amounts[index]] = index
 	}
 
 	return keysetAmounts

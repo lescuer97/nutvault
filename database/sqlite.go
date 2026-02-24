@@ -18,11 +18,11 @@ import (
 )
 
 type Seed struct {
+	FinalExpiry    *time.Time `db:"final_expiry"`
 	Unit           string
 	Id             string
 	DerivationPath string
-	Amounts        []uint64   `db:"amounts"`
-	FinalExpiry    *time.Time `db:"final_expiry"`
+	Amounts        []uint64 `db:"amounts"`
 	CreatedAt      int64
 	Version        uint64
 	InputFeePpk    uint `json:"input_fee_ppk" db:"input_fee_ppk"`

@@ -243,6 +243,7 @@ func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint64, amounts []uint64, exp
 		Keys:              nil,
 		FinalExpiry:       nil,
 		Amounts:           nil,
+		DerivationPath:    nil,
 		Version:           0,
 		InputFeePpk:       0,
 		DerivationPathIdx: 0,
@@ -281,7 +282,7 @@ func (l *Signer) RotateKeyset(unit cashu.Unit, fee uint64, amounts []uint64, exp
 		masterKey = nil
 	}()
 	if err != nil {
-		return newKey, fmt.Errorf(" bip32.NewMasterKey(privateKey.Serialize()). %w", err)
+		return newKey, fmt.Errorf(" GetMasterKey(). %w", err)
 	}
 
 	// Create New seed with one higher version

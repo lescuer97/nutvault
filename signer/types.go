@@ -11,11 +11,12 @@ import (
 )
 
 type MintPublicKeyset struct {
-	Id                []byte
-	Unit              string
 	Keys              map[uint64][]byte
 	FinalExpiry       *time.Time
+	Unit              string
+	Id                []byte
 	Amounts           []uint64
+	DerivationPath    []uint32
 	Version           uint64
 	InputFeePpk       uint
 	DerivationPathIdx uint32
@@ -27,6 +28,7 @@ type MintKeyset struct {
 	Unit              string
 	Keys              map[uint64]crypto.KeyPair
 	FinalExpiry       *time.Time
+	DerivationPath    []uint32
 	Amounts           []uint64
 	Version           uint64
 	InputFeePpk       uint
@@ -43,6 +45,7 @@ func MakeMintPublickeys(mintKey MintKeyset) MintPublicKeyset {
 		Keys:              make(map[uint64][]byte, len(mintKey.Keys)),
 		InputFeePpk:       mintKey.InputFeePpk,
 		Version:           mintKey.Version,
+		DerivationPath:    mintKey.DerivationPath,
 		FinalExpiry:       mintKey.FinalExpiry,
 		Amounts:           mintKey.Amounts,
 		Legacy:            false,
@@ -67,7 +70,7 @@ func (s *Signer) GenerateMintKeysFromPublicKeysets(keysetIndex KeysetGenerationI
 		masterKey = nil
 	}()
 	if err != nil {
-		return nil, fmt.Errorf(" bip32.NewMasterKey(privateKey.Serialize()). %w", err)
+		return nil, fmt.Errorf(" GetMasterKey(). %w", err)
 	}
 
 	slog.Debug(fmt.Sprintf("\n generating keys for %v keysets\n ", len(keysetIndex)))
@@ -79,10 +82,10 @@ func (s *Signer) GenerateMintKeysFromPublicKeysets(keysetIndex KeysetGenerationI
 		}
 
 		hexId := hex.EncodeToString(val.Id)
-		privateKeysets[i] = MintKeyset{Id: val.Id, Unit: val.Unit, DerivationPathIdx: val.DerivationPathIdx, Active: val.Active, InputFeePpk: val.InputFeePpk, FinalExpiry: val.FinalExpiry, Amounts: nil, Version: 0, Keys: nil}
-		keyset := MintKeyset{Id: val.Id, Unit: val.Unit, DerivationPathIdx: val.DerivationPathIdx, Active: val.Active, InputFeePpk: val.InputFeePpk, Keys: make(map[uint64]crypto.KeyPair), FinalExpiry: val.FinalExpiry, Amounts: nil, Version: 0}
+		privateKeysets[i] = MintKeyset{Id: val.Id, DerivationPath: val.DerivationPath, Unit: val.Unit, DerivationPathIdx: val.DerivationPathIdx, Active: val.Active, InputFeePpk: val.InputFeePpk, FinalExpiry: val.FinalExpiry, Amounts: nil, Version: 0, Keys: nil}
+		keyset := MintKeyset{Id: val.Id, DerivationPath: val.DerivationPath, Unit: val.Unit, DerivationPathIdx: val.DerivationPathIdx, Active: val.Active, InputFeePpk: val.InputFeePpk, Keys: make(map[uint64]crypto.KeyPair), FinalExpiry: val.FinalExpiry, Amounts: nil, Version: 0}
 
-		keys, err := KeyDerivation(masterKey, val.DerivationPathIdx, val.Unit, keysetAmounts)
+		keys, err := KeyDerivation(masterKey, val.DerivationPath, keysetAmounts)
 		if err != nil {
 			return privateKeysets, fmt.Errorf("KeyDerivation(mintKey,&keyset, seed, unit) %w", err)
 		}
