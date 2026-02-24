@@ -52,13 +52,13 @@ message KeysResponse {
 
 message SignatoryKeysets {
   bytes pubkey = 1; // @gotags: validate:"required"
-  repeated KeySet keysets = 2; // @gotags: validate:"required"
+  repeated KeySet keysets = 2; 
 }
 
 message KeySet {
   bytes id = 1; // @gotags: validate:"required"
   CurrencyUnit unit = 2; // @gotags: validate:"required"
-  bool active = 3; // @gotags: validate:"required"
+  bool active = 3; 
   uint64 input_fee_ppk = 4; 
   Keys keys = 5; // @gotags: validate:"required"
   optional uint64 final_expiry = 6;

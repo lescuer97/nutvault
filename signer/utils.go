@@ -122,7 +122,7 @@ func convertPubkeysMapToOrderArray(raw map[uint64]*secp256k1.PublicKey) []*secp2
 
 func DeriveKeyset(mintKey *hdkeychain.ExtendedKey, seed database.Seed) (MintKeyset, error) {
 	keyset := MintKeyset{
-		Id: nil,
+		Id:                nil,
 		Unit:              seed.Unit,
 		InputFeePpk:       seed.InputFeePpk,
 		Active:            seed.Active,
@@ -142,10 +142,11 @@ func DeriveKeyset(mintKey *hdkeychain.ExtendedKey, seed database.Seed) (MintKeys
 	amountsMap := OrderAndTransformAmounts(seed.Amounts)
 
 	slog.Info("Generating Key keys.", slog.String("keyId", seed.Id), slog.String("amount", fmt.Sprintf("%v", seed.Amounts)))
-	err = KeyDerivation(mintKey, &keyset, seed, unit.String(), amountsMap)
+	keys, err := KeyDerivation(mintKey, uint32(seed.Version), unit.String(), amountsMap)
 	if err != nil {
 		return keyset, fmt.Errorf("KeyDerivation(mintKey,&keyset, seed, unit) %w", err)
 	}
+	keyset.Keys = keys
 
 	publicKeys := make(map[uint64]*secp256k1.PublicKey)
 	for i, val := range keyset.Keys {
@@ -156,10 +157,7 @@ func DeriveKeyset(mintKey *hdkeychain.ExtendedKey, seed database.Seed) (MintKeys
 	// INFO: if the seed id doesn't exists we generate it. we check the version byte and generate
 	id := ""
 	if len(seed.Id) == 0 {
-		id, err = DeriveKeysetId(publicKeysList)
-		if err != nil {
-			return keyset, fmt.Errorf("DeriveKeysetId(publicKeysList) %w", err)
-		}
+		id = DeriveKeysetIdV2(publicKeys, seed.Unit, seed.InputFeePpk, seed.FinalExpiry)
 	} else {
 		switch seed.Id[:2] {
 		case "00":
@@ -232,50 +230,49 @@ func ParseUnitToIntegerReference(unit string) uint32 {
 	return unitInteger &^ (1 << 31)
 }
 
-		// FIXME: dont pass the key by reference but retuned them and plug the keyset keys to the struct
-func KeyDerivation(key *hdkeychain.ExtendedKey, keyset *MintKeyset, seed database.Seed, unit string, amounts KeysetAmounts) error {
+func KeyDerivation(key *hdkeychain.ExtendedKey, version uint32, unit string, amounts KeysetAmounts) (map[uint64]crypto.KeyPair, error) {
 	peanutKey, err := key.Derive(hdkeychain.HardenedKeyStart + PeanutUTF8)
 	if err != nil {
-		return fmt.Errorf("mintKey.NewChildKey(uint32(unit.EnumIndex())). %w", err)
+		return nil, fmt.Errorf("mintKey.NewChildKey(uint32(unit.EnumIndex())). %w", err)
 	}
 	unitInteger := ParseUnitToIntegerReference(unit)
 
 	unitKey, err := peanutKey.Derive(hdkeychain.HardenedKeyStart + unitInteger)
 	if err != nil {
-		return fmt.Errorf("mintKey.NewChildKey(uint32(unit.EnumIndex())). %w", err)
+		return nil, fmt.Errorf("mintKey.NewChildKey(uint32(unit.EnumIndex())). %w", err)
 	}
 
-	versionKey, err := unitKey.Derive(hdkeychain.HardenedKeyStart + uint32(seed.Version))
+	versionKey, err := unitKey.Derive(hdkeychain.HardenedKeyStart + version)
 	if err != nil {
-		return fmt.Errorf("mintKey.NewChildKey(uint32(seed.Version)) %w", err)
+		return nil, fmt.Errorf("mintKey.NewChildKey(uint32(seed.Version)) %w", err)
 	}
 
-	err = GenerateKeypairs(versionKey, amounts, keyset)
+	generatedKeys, err := GenerateKeypairs(versionKey, amounts)
 	if err != nil {
-		return fmt.Errorf(`GenerateKeypairs(versionKey, values, &keyset) %w`, err)
+		return nil, fmt.Errorf(`GenerateKeypairs(versionKey, values, &keyset) %w`, err)
 	}
-	keyset.Version = seed.Version
-	return nil
+	return generatedKeys, nil
 }
 
-func GenerateKeypairs(versionKey *hdkeychain.ExtendedKey, values KeysetAmounts, keyset *MintKeyset) error {
+func GenerateKeypairs(versionKey *hdkeychain.ExtendedKey, values KeysetAmounts) (map[uint64]crypto.KeyPair, error) {
+	keys := make(map[uint64]crypto.KeyPair, len(values))
 	for value, i := range values {
 		// uses the value it represents to derive the key
 		childKey, err := versionKey.Derive(hdkeychain.HardenedKeyStart + uint32(i))
 		if err != nil {
-			return err
+			return nil, err
 		}
 		privKey, err := childKey.ECPrivKey()
 		if err != nil {
-			return err
+			return nil, err
 		}
 		keypair := crypto.KeyPair{
 			PrivateKey: privKey,
 			PublicKey:  privKey.PubKey(),
 		}
-		keyset.Keys[value] = keypair
+		keys[value] = keypair
 	}
-	return nil
+	return keys, nil
 }
 
 func GetMasterKey() (*hdkeychain.ExtendedKey, error) {

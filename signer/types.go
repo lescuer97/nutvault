@@ -83,13 +83,12 @@ func (s *Signer) GenerateMintKeysFromPublicKeysets(keysetIndex KeysetGenerationI
 		privateKeysets[i] = MintKeyset{Id: val.Id, Unit: val.Unit, DerivationPathIdx: val.DerivationPathIdx, Active: val.Active, InputFeePpk: val.InputFeePpk, FinalExpiry: val.FinalExpiry, Amounts: nil, Version: 0, Keys: nil}
 		keyset := MintKeyset{Id: val.Id, Unit: val.Unit, DerivationPathIdx: val.DerivationPathIdx, Active: val.Active, InputFeePpk: val.InputFeePpk, Keys: make(map[uint64]crypto.KeyPair), FinalExpiry: val.FinalExpiry, Amounts: nil, Version: 0}
 
-
 		seed := database.Seed{Active: val.Active, Id: hexId, Unit: val.Unit, Version: uint64(val.DerivationPathIdx), InputFeePpk: val.InputFeePpk, Legacy: false, FinalExpiry: nil, Amounts: nil, CreatedAt: 0}
-		// FIXME: dont pass the key by reference but retuned them 
-		err := KeyDerivation(masterKey, &keyset, seed, val.Unit, keysetAmounts)
+		keys, err := KeyDerivation(masterKey, uint32(seed.Version), val.Unit, keysetAmounts)
 		if err != nil {
 			return privateKeysets, fmt.Errorf("KeyDerivation(mintKey,&keyset, seed, unit) %w", err)
 		}
+		keyset.Keys = keys
 		privateKeysets[hexId] = keyset
 	}
 	return privateKeysets, nil

@@ -181,7 +181,7 @@ func TestDeriveKeysetSat(t *testing.T) {
 			t.Errorf("key values should be the same: \n CalculatedKey %x. \n NeededKey %v", keys.PublicKey.SerializeCompressed(), val)
 		}
 	}
-	if hex.EncodeToString(mintKeyset.Id) != "00d4119196b8d6a2" {
+	if hex.EncodeToString(mintKeyset.Id) != "0107b4645ae16ff212d20e93a50ce58fbf98f39cdc74e5de0c10d53d308b83e7f5" {
 		t.Errorf("id was incorrect. %x", mintKeyset.Id)
 	}
 }
@@ -220,7 +220,7 @@ func TestDeriveKeysetAuth(t *testing.T) {
 		"1": "025b6c1ca8bb741a6f2321c953266df7bf3f3f2c3be8c54c0a6e41bb00976046a4",
 	}
 
-	if hex.EncodeToString(mintKeyset.Id) != "00e1cf6079abb988" {
+	if hex.EncodeToString(mintKeyset.Id) != "0155aa7fe1cd5e722f0ed04b6f1999e418d9f82a3d26def9aaaafd5d5259edbc0a" {
 		t.Errorf("id was incorrect. %x", mintKeyset.Id)
 	}
 
