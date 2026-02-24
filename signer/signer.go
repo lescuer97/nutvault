@@ -91,7 +91,7 @@ func SetupLocalSigner(db database.SqliteDB, config Config) (Signer, error) {
 		amounts := GetAmountsFromMaxOrder(DefaultMaxOrder)
 
 		slog.Info("Creating a new seed")
-		newSeed, err := signer.createNewSeed(masterKey, cashu.Sat, 0, 0, amounts, config.ExpireTime)
+		newSeed, err := signer.createNewSeed(masterKey, cashu.Sat, 0, 0, amounts, nil)
 
 		if err != nil {
 			return signer, fmt.Errorf("signer.createNewSeed(masterKey, 1, 0). %w", err)
@@ -200,15 +200,16 @@ func (l *Signer) createNewSeed(mintPrivateKey *hdkeychain.ExtendedKey, unit cash
 
 	// rotate one level up
 	newSeed := database.Seed{
-		CreatedAt:   time.Now().Unix(),
-		Active:      true,
-		Version:     version,
-		Unit:        unitNormalization(unit.String()),
-		InputFeePpk: fee,
-		Legacy:      false,
-		Amounts:     amounts,
-		FinalExpiry: expiry_time,
-		Id:          "",
+		CreatedAt:      time.Now().Unix(),
+		Active:         true,
+		Version:        version,
+		Unit:           unitNormalization(unit.String()),
+		InputFeePpk:    fee,
+		Legacy:         false,
+		Amounts:        amounts,
+		FinalExpiry:    expiry_time,
+		Id:             "",
+		DerivationPath: keyDerivation(uint(version), unit),
 	}
 
 	keyset, err := DeriveKeyset(mintPrivateKey, newSeed)

@@ -76,15 +76,16 @@ func TestAuthConvertToInteger(t *testing.T) {
 
 func TestDeriveKeysetSat(t *testing.T) {
 	seed := database.Seed{
-		Active:      true,
-		CreatedAt:   time.Now().Unix(),
-		Version:     1,
-		Unit:        cashu.Sat.String(),
-		Id:          "",
-		InputFeePpk: 0,
-		Legacy:      false,
-		Amounts:     GetAmountsFromMaxOrder(DefaultMaxOrder),
-		FinalExpiry: nil,
+		Active:         true,
+		CreatedAt:      time.Now().Unix(),
+		Version:        1,
+		Unit:           cashu.Sat.String(),
+		Id:             "",
+		InputFeePpk:    0,
+		Legacy:         false,
+		Amounts:        GetAmountsFromMaxOrder(DefaultMaxOrder),
+		FinalExpiry:    nil,
+		DerivationPath: keyDerivation(1, cashu.Sat),
 	}
 	privateKeyBytes, err := hex.DecodeString(MintPrivateKey)
 	if err != nil {
@@ -188,15 +189,16 @@ func TestDeriveKeysetSat(t *testing.T) {
 
 func TestDeriveKeysetAuth(t *testing.T) {
 	seed := database.Seed{
-		Active:      true,
-		CreatedAt:   time.Now().Unix(),
-		Version:     1,
-		Unit:        cashu.AUTH.String(),
-		Id:          "",
-		InputFeePpk: 0,
-		Legacy:      false,
-		Amounts:     []uint64{1},
-		FinalExpiry: nil,
+		Active:         true,
+		CreatedAt:      time.Now().Unix(),
+		Version:        1,
+		Unit:           cashu.AUTH.String(),
+		Id:             "",
+		InputFeePpk:    0,
+		Legacy:         false,
+		Amounts:        []uint64{1},
+		FinalExpiry:    nil,
+		DerivationPath: keyDerivation(1, cashu.AUTH),
 	}
 	privateKeyBytes, err := hex.DecodeString(MintPrivateKey)
 	if err != nil {

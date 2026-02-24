@@ -13,6 +13,7 @@ import (
 	"nutmix_remote_signer/utils"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -142,9 +143,26 @@ func DeriveKeyset(mintKey *hdkeychain.ExtendedKey, seed database.Seed) (MintKeys
 	amountsMap := OrderAndTransformAmounts(seed.Amounts)
 
 	slog.Info("Generating Key keys.", slog.String("keyId", seed.Id), slog.String("amount", fmt.Sprintf("%v", seed.Amounts)))
-	keys, err := KeyDerivation(mintKey, uint32(seed.Version), unit.String(), amountsMap)
-	if err != nil {
-		return keyset, fmt.Errorf("KeyDerivation(mintKey,&keyset, seed, unit) %w", err)
+	var keys map[uint64]crypto.KeyPair
+	if seed.Legacy {
+		err = LegacyKeyDerivation(mintKey, &keyset, seed, unit, amountsMap)
+		if err != nil {
+			return keyset, fmt.Errorf("LegacyKeyDerivation(mintKey, &keyset, seed, unit, amountsMap) %w", err)
+		}
+		keys = keyset.Keys
+	} else {
+		derivationPath := seed.DerivationPath
+		if derivationPath == "" {
+			derivationPath = keyDerivation(uint(seed.Version), unit)
+		}
+		derivedKey, err := deriveKeyFromPath(mintKey, derivationPath)
+		if err != nil {
+			return keyset, fmt.Errorf("deriveKeyFromPath(mintKey, derivationPath) %w", err)
+		}
+		keys, err = GenerateKeypairs(derivedKey, amountsMap)
+		if err != nil {
+			return keyset, fmt.Errorf("GenerateKeypairs(derivedKey, amountsMap) %w", err)
+		}
 	}
 	keyset.Keys = keys
 
@@ -228,6 +246,53 @@ func ParseUnitToIntegerReference(unit string) uint32 {
 	unitSha256 := sha256.Sum256([]byte(unit))
 	unitInteger := binary.BigEndian.Uint32(unitSha256[:4])
 	return unitInteger &^ (1 << 31)
+}
+
+func keyDerivation(version uint, unit cashu.Unit) string {
+	unitInteger := ParseUnitToIntegerReference(unit.String())
+	return fmt.Sprintf("%v'/%v'/%v'", PeanutUTF8, unitInteger, version)
+}
+
+func getDerivationSteps(path string) ([]uint32, error) {
+	derivationPathSeparation := strings.Split(path, "/")
+	if len(derivationPathSeparation) == 0 {
+		return nil, fmt.Errorf("derivation path is empty")
+	}
+	derivationPaths := make([]uint32, len(derivationPathSeparation))
+
+	for i := range derivationPathSeparation {
+		splitDer := strings.Split(derivationPathSeparation[i], "'")
+		if len(splitDer) == 2 {
+			derIndex, err := strconv.ParseUint(splitDer[0], 10, 32)
+			if err != nil {
+				return nil, fmt.Errorf("could not convert derivation path. %w", err)
+			}
+
+			derivationPaths[i] = hdkeychain.HardenedKeyStart + uint32(derIndex)
+			continue
+		}
+		derIndex, err := strconv.ParseUint(splitDer[0], 10, 32)
+		if err != nil {
+			return nil, fmt.Errorf("could not convert derivation path number. %w", err)
+		}
+		derivationPaths[i] = uint32(derIndex)
+	}
+
+	return derivationPaths, nil
+}
+
+func deriveKeyFromPath(mintKey *hdkeychain.ExtendedKey, path string) (*hdkeychain.ExtendedKey, error) {
+	paths, err := getDerivationSteps(path)
+	if err != nil {
+		return nil, fmt.Errorf("getDerivationSteps(path) %w", err)
+	}
+	for i := range paths {
+		mintKey, err = mintKey.Derive(paths[i])
+		if err != nil {
+			return nil, fmt.Errorf("mintKey.Derive(paths[i]) %w", err)
+		}
+	}
+	return mintKey, nil
 }
 
 func KeyDerivation(key *hdkeychain.ExtendedKey, version uint32, unit string, amounts KeysetAmounts) (map[uint64]crypto.KeyPair, error) {

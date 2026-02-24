@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -11,22 +12,22 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fxamacker/cbor/v2"
 	"github.com/lescuer97/nutmix/api/cashu"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/pressly/goose/v3"
 )
 
 type Seed struct {
-	FinalExpiry *time.Time `db:"final_expiry"`
-	Unit        string
-	Id          string
-	Amounts     []uint64 `db:"amounts"`
-	CreatedAt   int64
-	Version     uint64
-	InputFeePpk uint `json:"input_fee_ppk" db:"input_fee_ppk"`
-	Active      bool
-	Legacy      bool
+	Unit           string
+	Id             string
+	DerivationPath string
+	Amounts        []uint64   `db:"amounts"`
+	FinalExpiry    *time.Time `db:"final_expiry"`
+	CreatedAt      int64
+	Version        uint64
+	InputFeePpk    uint `json:"input_fee_ppk" db:"input_fee_ppk"`
+	Active         bool
+	Legacy         bool
 }
 
 type SqliteDB struct {
@@ -64,7 +65,7 @@ func DatabaseSetup(ctx context.Context, databaseDir string) (SqliteDB, error) {
 
 func (sq *SqliteDB) GetAllSeeds() ([]Seed, error) {
 	seeds := []Seed{}
-	stmt, err := sq.Db.Prepare(`SELECT created_at, active, version, unit, id, "input_fee_ppk", legacy, amounts, final_expiry FROM seeds ORDER BY version DESC`)
+	stmt, err := sq.Db.Prepare(`SELECT created_at, active, version, unit, id, "input_fee_ppk", legacy, derivation_path, amounts, final_expiry FROM seeds ORDER BY version DESC`)
 	if err != nil {
 		return seeds, fmt.Errorf(`SELECT created_at, active, version, unit, id, "input_fee_ppk", legacy, max_order, final_expiry FROM seeds ORDER BY version DESC %w`, err)
 	}
@@ -84,7 +85,7 @@ func (sq *SqliteDB) GetAllSeeds() ([]Seed, error) {
 		var seed Seed
 		amountsStr := ""
 		var timeUnix *int64
-		err = rows.Scan(&seed.CreatedAt, &seed.Active, &seed.Version, &seed.Unit, &seed.Id, &seed.InputFeePpk, &seed.Legacy, &amountsStr, &timeUnix)
+		err = rows.Scan(&seed.CreatedAt, &seed.Active, &seed.Version, &seed.Unit, &seed.Id, &seed.InputFeePpk, &seed.Legacy, &seed.DerivationPath, &amountsStr, &timeUnix)
 		if err != nil {
 			return seeds, fmt.Errorf(`rows.Scan(&seed.CreatedAt, &seed.Active, &seed.Version, &seed.Unit, &seed.Id, &seed.InputFeePpk, &seed.Legacy, &seed.ExpiryTime) %w`, err)
 		}
@@ -94,9 +95,9 @@ func (sq *SqliteDB) GetAllSeeds() ([]Seed, error) {
 			seed.FinalExpiry = &timestamp
 		}
 
-		err := cbor.Unmarshal([]byte(amountsStr), &seed.Amounts)
+		err := json.Unmarshal([]byte(amountsStr), &seed.Amounts)
 		if err != nil {
-			return seeds, fmt.Errorf(`cbor.Unmarshal([]byte(amountsStr), &seed.Amounts) %w`, err)
+			return seeds, fmt.Errorf(`json.Unmarshal([]byte(amountsStr), &seed.Amounts) %w`, err)
 		}
 
 		seeds = append(seeds, seed)
@@ -106,7 +107,7 @@ func (sq *SqliteDB) GetAllSeeds() ([]Seed, error) {
 
 func (sq *SqliteDB) GetSeedsByUnit(tx *sql.Tx, unit cashu.Unit) ([]Seed, error) {
 	seeds := []Seed{}
-	stmt, err := tx.Prepare("SELECT created_at, active, version, unit, id, input_fee_ppk, legacy, amounts, final_expiry FROM seeds WHERE unit = $1")
+	stmt, err := tx.Prepare("SELECT created_at, active, version, unit, id, input_fee_ppk, legacy, derivation_path, amounts, final_expiry FROM seeds WHERE unit = $1")
 	if err != nil {
 		return seeds, fmt.Errorf(`tx.Prepare("SELECT created_at, active, version, unit, id, input_fee_ppk, legacy, max_order FROM seeds WHERE unit = $1"). %w`, err)
 	}
@@ -129,13 +130,13 @@ func (sq *SqliteDB) GetSeedsByUnit(tx *sql.Tx, unit cashu.Unit) ([]Seed, error) 
 		var seed Seed
 		amountsStr := ""
 		var timeUnix *int64
-		err = rows.Scan(&seed.CreatedAt, &seed.Active, &seed.Version, &seed.Unit, &seed.Id, &seed.InputFeePpk, &seed.Legacy, &amountsStr, &timeUnix)
+		err = rows.Scan(&seed.CreatedAt, &seed.Active, &seed.Version, &seed.Unit, &seed.Id, &seed.InputFeePpk, &seed.Legacy, &seed.DerivationPath, &amountsStr, &timeUnix)
 		if err != nil {
 			return seeds, fmt.Errorf(`rows.Scan(&seed.CreatedAt, &seed.Active, &seed.Version, &seed.Unit, &seed.Id, &seed.InputFeePpk, &seed.Legacy, &seed.ExpiryTime) %w`, err)
 		}
-		err := cbor.Unmarshal([]byte(amountsStr), &seed.Amounts)
+		err := json.Unmarshal([]byte(amountsStr), &seed.Amounts)
 		if err != nil {
-			return seeds, fmt.Errorf(`cbor.Unmarshal([]byte(amountsStr), &seed.Amounts) %w`, err)
+			return seeds, fmt.Errorf(`json.Unmarshal([]byte(amountsStr), &seed.Amounts) %w`, err)
 		}
 		if timeUnix != nil {
 			timestamp := time.Unix(*timeUnix, 0)
@@ -150,9 +151,9 @@ func (sq *SqliteDB) GetSeedsByUnit(tx *sql.Tx, unit cashu.Unit) ([]Seed, error) 
 func (sq *SqliteDB) SaveNewSeed(tx *sql.Tx, seed Seed) error {
 
 	tries := 0
-	amounts, err := cbor.Marshal(seed.Amounts)
+	amounts, err := json.Marshal(seed.Amounts)
 	if err != nil {
-		return fmt.Errorf("cbor.Marshal(seed.Amounts). %w", err)
+		return fmt.Errorf("json.Marshal(seed.Amounts). %w", err)
 
 	}
 
@@ -165,7 +166,7 @@ func (sq *SqliteDB) SaveNewSeed(tx *sql.Tx, seed Seed) error {
 
 	for {
 		tries += 1
-		_, err := tx.Exec("INSERT INTO seeds (active, created_at, unit, id, version, input_fee_ppk, legacy, amounts, final_expiry) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)", seed.Active, seed.CreatedAt, seed.Unit, seed.Id, seed.Version, seed.InputFeePpk, seed.Legacy, string(amounts), unixTimestamp)
+		_, err := tx.Exec("INSERT INTO seeds (active, created_at, unit, id, version, input_fee_ppk, legacy, derivation_path, amounts, final_expiry) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)", seed.Active, seed.CreatedAt, seed.Unit, seed.Id, seed.Version, seed.InputFeePpk, seed.Legacy, seed.DerivationPath, string(amounts), unixTimestamp)
 
 		switch {
 		case err != nil && tries < 3:

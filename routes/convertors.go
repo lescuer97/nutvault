@@ -55,13 +55,14 @@ func ConvertToKeysResponse(pubkey []byte, keys []signer.MintPublicKeyset) *sig.K
 			finalExpiry = &timestamp
 		}
 		keyset := sig.KeySet{
-			Id:          mintPubKey.Id,
-			Unit:        currUnit,
-			Active:      mintPubKey.Active,
-			InputFeePpk: uint64(mintPubKey.InputFeePpk),
-			Keys:        &keys,
-			Version:     uint32(mintPubKey.Version),
-			FinalExpiry: finalExpiry,
+			Id:            mintPubKey.Id,
+			Unit:          currUnit,
+			Active:        mintPubKey.Active,
+			InputFeePpk:   uint64(mintPubKey.InputFeePpk),
+			Keys:          &keys,
+			Version:       uint32(mintPubKey.Version),
+			FinalExpiry:   finalExpiry,
+			IssuerVersion: nil,
 		}
 
 		if keyset.Keys == nil {
@@ -89,13 +90,14 @@ func ConvertToKeyRotationResponse(key signer.MintPublicKeyset) *sig.KeyRotationR
 	}
 
 	keyset := sig.KeySet{
-		Id:          key.Id,
-		Unit:        currUnit,
-		Active:      key.Active,
-		InputFeePpk: uint64(key.InputFeePpk),
-		Keys:        &keys,
-		Version:     uint32(key.Version),
-		FinalExpiry: finalExpiry,
+		Id:            key.Id,
+		Unit:          currUnit,
+		Active:        key.Active,
+		InputFeePpk:   uint64(key.InputFeePpk),
+		Keys:          &keys,
+		Version:       uint32(key.Version),
+		FinalExpiry:   finalExpiry,
+		IssuerVersion: nil,
 	}
 
 	if keyset.Keys == nil {

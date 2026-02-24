@@ -20,15 +20,16 @@ func TestSeedRotation(t *testing.T) {
 	}()
 
 	seed := Seed{
-		Active:      true,
-		Version:     1,
-		Id:          "id1",
-		Unit:        cashu.Sat.String(),
-		InputFeePpk: 1,
-		Legacy:      false,
-		Amounts:     []uint64{1, 2, 4},
-		CreatedAt:   2,
-		FinalExpiry: nil,
+		Active:         true,
+		Version:        1,
+		Id:             "id1",
+		Unit:           cashu.Sat.String(),
+		InputFeePpk:    1,
+		Legacy:         false,
+		Amounts:        []uint64{1, 2, 4},
+		CreatedAt:      2,
+		FinalExpiry:    nil,
+		DerivationPath: "0/0/0",
 	}
 
 	tx, err := sqlite.Db.Begin()
@@ -51,15 +52,16 @@ func TestSeedRotation(t *testing.T) {
 	}
 
 	seed2 := Seed{
-		Active:      true,
-		Version:     2,
-		Id:          "id2",
-		Unit:        cashu.Sat.String(),
-		InputFeePpk: 1,
-		Legacy:      false,
-		Amounts:     []uint64{1, 2, 4},
-		CreatedAt:   2,
-		FinalExpiry: nil,
+		Active:         true,
+		Version:        2,
+		Id:             "id2",
+		Unit:           cashu.Sat.String(),
+		InputFeePpk:    1,
+		Legacy:         false,
+		Amounts:        []uint64{1, 2, 4},
+		CreatedAt:      2,
+		FinalExpiry:    nil,
+		DerivationPath: "0/0/0",
 	}
 
 	err = sqlite.SaveNewSeed(tx, seed2)
@@ -104,15 +106,16 @@ func TestSeedRotation2(t *testing.T) {
 	}
 
 	seed := Seed{
-		Active:      true,
-		Version:     1,
-		Id:          "id1",
-		Unit:        cashu.Sat.String(),
-		InputFeePpk: 1,
-		Legacy:      false,
-		Amounts:     []uint64{1, 2, 4},
-		CreatedAt:   2,
-		FinalExpiry: nil,
+		Active:         true,
+		Version:        1,
+		Id:             "id1",
+		Unit:           cashu.Sat.String(),
+		InputFeePpk:    1,
+		Legacy:         false,
+		Amounts:        []uint64{1, 2, 4},
+		CreatedAt:      2,
+		FinalExpiry:    nil,
+		DerivationPath: "0/0/0",
 	}
 
 	tx, err := sqlite.Db.Begin()
