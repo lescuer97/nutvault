@@ -58,6 +58,9 @@ func SetupLocalSigner(db database.SqliteDB, config Config) (*Signer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("getMasterMnemonic(): %w", err)
 	}
+	defer func() {
+		masterMnemonic = ""
+	}()
 
 	accountsWithSeeds, err := signer.db.GetAccountsWithSeeds()
 	if err != nil {
