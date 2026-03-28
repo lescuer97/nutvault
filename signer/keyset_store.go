@@ -4,6 +4,8 @@ import (
 	"sync"
 
 	"nutmix_remote_signer/database"
+
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
 // KeysetStore groups keysets, active keysets and indexes with a mutex
@@ -12,6 +14,7 @@ type KeysetStore struct {
 	keysets       map[string]MintPublicKeyset
 	activeKeysets map[string]MintPublicKeyset
 	indexes       KeysetGenerationIndexes
+	pubkey        *secp256k1.PublicKey
 	mu            sync.RWMutex
 }
 
@@ -29,6 +32,18 @@ func (k *KeysetStore) SetAll(keysets map[string]MintPublicKeyset, active map[str
 	defer k.mu.Unlock()
 	k.keysets = keysets
 	k.activeKeysets = active
+}
+
+func (k *KeysetStore) SetPubkey(pubkey *secp256k1.PublicKey) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	k.pubkey = pubkey
+}
+
+func (k *KeysetStore) GetPubkey() *secp256k1.PublicKey {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
+	return k.pubkey
 }
 
 func (k *KeysetStore) GetKeysetsList() []MintPublicKeyset {
@@ -54,7 +69,11 @@ func (k *KeysetStore) GetKeysetsMapCopy() map[string]MintPublicKeyset {
 func (k *KeysetStore) GetActiveKeysetsCopy() map[string]MintPublicKeyset {
 	k.mu.RLock()
 	defer k.mu.RUnlock()
-	return k.activeKeysets
+	active := make(map[string]MintPublicKeyset, len(k.activeKeysets))
+	for key, value := range k.activeKeysets {
+		active[key] = value
+	}
+	return active
 }
 
 func (k *KeysetStore) GetIndex(id string) (map[uint64]int, bool) {

@@ -18,19 +18,32 @@ import (
 )
 
 type Server struct {
-	Signer signer.Signer
+	Signer *signer.Signer
 	sig.SignatoryServer
+}
+
+func signerInfoFromContext(ctx context.Context) (signer.SignerInfo, error) {
+	signerIn := ctx.Value(signerInfoKey)
+	signerInfo, ok := signerIn.(signer.SignerInfo)
+	if !ok {
+		return signer.SignerInfo{}, fmt.Errorf("no valid signer info in context")
+	}
+	return signerInfo, nil
 }
 
 func (s *Server) BlindSign(ctx context.Context, message *sig.BlindedMessages) (*sig.BlindSignResponse, error) {
 	slog.Info("Receive request for Blind signing")
+	signerInfo, err := signerInfoFromContext(ctx)
+	if err != nil {
+		return &sig.BlindSignResponse{Error: &sig.Error{Code: sig.ErrorCode_ERROR_CODE_UNSPECIFIED, Detail: err.Error()}}, nil
+	}
 
 	blindMessages := goNutsCashu.BlindedMessages{}
 	for _, val := range message.BlindedMessages {
 		blindMessages = append(blindMessages, goNutsCashu.BlindedMessage{Amount: val.Amount, Id: hex.EncodeToString(val.KeysetId), B_: hex.EncodeToString(val.BlindedSecret), Witness: ""})
 	}
 
-	blindSigs, err := s.Signer.SignBlindMessages(blindMessages)
+	blindSigs, err := s.Signer.SignBlindMessages(blindMessages, signerInfo)
 
 	blindSigsResponse := sig.BlindSignResponse{
 		Error: nil,
@@ -97,12 +110,16 @@ func (s *Server) BlindSign(ctx context.Context, message *sig.BlindedMessages) (*
 
 func (s *Server) VerifyProofs(ctx context.Context, proofs *sig.Proofs) (*sig.BooleanResponse, error) {
 	slog.Info("Receive Proof verification request")
+	signerInfo, err := signerInfoFromContext(ctx)
+	if err != nil {
+		return &sig.BooleanResponse{Error: &sig.Error{Code: sig.ErrorCode_ERROR_CODE_UNSPECIFIED, Detail: err.Error()}}, nil
+	}
 	cashuProofs := goNutsCashu.Proofs{}
 	slog.Debug("Parsing grpc proofs to signer types")
 	for _, val := range proofs.Proof {
 		cashuProofs = append(cashuProofs, goNutsCashu.Proof{Amount: val.Amount, Id: hex.EncodeToString(val.KeysetId), C: hex.EncodeToString(val.C), Witness: "", Secret: string(val.Secret), DLEQ: nil})
 	}
-	err := s.Signer.VerifyProofs(cashuProofs, goNutsCashu.BlindedMessages{})
+	err = s.Signer.VerifyProofs(signerInfo, cashuProofs, goNutsCashu.BlindedMessages{})
 
 	boolResponse := sig.BooleanResponse{
 		Error:   nil,
@@ -123,9 +140,19 @@ func (s *Server) VerifyProofs(ctx context.Context, proofs *sig.Proofs) (*sig.Boo
 
 func (s *Server) Keysets(ctx context.Context, _ *sig.EmptyRequest) (*sig.KeysResponse, error) {
 	slog.Debug("Received request to all keysets")
+	signerInfo, err := signerInfoFromContext(ctx)
+	if err != nil {
+		return &sig.KeysResponse{Error: &sig.Error{Code: sig.ErrorCode_ERROR_CODE_UNSPECIFIED, Detail: err.Error()}}, nil
+	}
 
-	keys := s.Signer.GetKeysets()
-	pubkey := s.Signer.GetSignerPubkey()
+	keys, err := s.Signer.GetKeysets(signerInfo)
+	if err != nil {
+		return nil, err
+	}
+	pubkey, err := s.Signer.GetSignerPubkey(signerInfo)
+	if err != nil {
+		return nil, err
+	}
 	keysResponse := ConvertToKeysResponse(pubkey, keys)
 
 	return keysResponse, nil
@@ -133,6 +160,10 @@ func (s *Server) Keysets(ctx context.Context, _ *sig.EmptyRequest) (*sig.KeysRes
 
 func (s *Server) RotateKeyset(ctx context.Context, req *sig.RotationRequest) (*sig.KeyRotationResponse, error) {
 	slog.Info("Received key rotation request")
+	signerInfo, err := signerInfoFromContext(ctx)
+	if err != nil {
+		return &sig.KeyRotationResponse{Error: &sig.Error{Code: sig.ErrorCode_ERROR_CODE_UNSPECIFIED, Detail: err.Error()}}, nil
+	}
 
 	rotationReq, err := ConvertSigRotationRequest(req)
 	if err != nil {
@@ -158,7 +189,7 @@ func (s *Server) RotateKeyset(ctx context.Context, req *sig.RotationRequest) (*s
 		expiryTime = &expTime
 	}
 
-	newKey, err := s.Signer.RotateKeyset(rotationReq.Unit, rotationReq.Fee, rotationReq.Amounts, expiryTime)
+	newKey, err := s.Signer.RotateKeyset(signerInfo, rotationReq.Unit, rotationReq.Fee, rotationReq.Amounts, expiryTime)
 	if err != nil {
 		slog.Error("Could not rotate keysets", slog.String("extra", err.Error()))
 		if mappedErr := ConvertErrorToResponse(err); mappedErr != nil {

@@ -10,6 +10,13 @@ import (
 	"github.com/elnosh/gonuts/crypto"
 )
 
+type SignerInfo struct {
+	AccountID  string
+	Derivation uint32
+}
+
+type KeysetGenerationIndexes map[string]map[uint64]int
+
 type MintPublicKeyset struct {
 	Keys              map[uint64][]byte
 	FinalExpiry       *time.Time
@@ -23,6 +30,7 @@ type MintPublicKeyset struct {
 	Active            bool
 	Legacy            bool
 }
+
 type MintKeyset struct {
 	Id                []byte
 	Unit              string
@@ -34,6 +42,7 @@ type MintKeyset struct {
 	InputFeePpk       uint
 	DerivationPathIdx uint32
 	Active            bool
+	Legacy            bool
 }
 
 func MakeMintPublickeys(mintKey MintKeyset) MintPublicKeyset {
@@ -48,7 +57,7 @@ func MakeMintPublickeys(mintKey MintKeyset) MintPublicKeyset {
 		DerivationPath:    mintKey.DerivationPath,
 		FinalExpiry:       mintKey.FinalExpiry,
 		Amounts:           mintKey.Amounts,
-		Legacy:            false,
+		Legacy:            mintKey.Legacy,
 	}
 
 	for key, keypair := range mintKey.Keys {
@@ -62,35 +71,51 @@ func MakeMintPublickeys(mintKey MintKeyset) MintPublicKeyset {
 	return result
 }
 
-func (s *Signer) GenerateMintKeysFromPublicKeysets(keysetIndex KeysetGenerationIndexes) (map[string]MintKeyset, error) {
-
+func (s *Signer) GenerateMintKeysFromPublicKeysets(keysetIndex KeysetGenerationIndexes, signerInfo SignerInfo) (map[string]MintKeyset, error) {
 	privateKeysets := make(map[string]MintKeyset)
-	masterKey, err := GetMasterKey()
+	masterKey, err := s.getAccountMasterKey(signerInfo)
+	if err != nil {
+		return nil, fmt.Errorf("s.getAccountMasterKey(signerInfo): %w", err)
+	}
 	defer func() {
 		masterKey = nil
 	}()
+
+	store, err := s.accounts.GetAccount(signerInfo.AccountID)
 	if err != nil {
-		return nil, fmt.Errorf(" GetMasterKey(). %w", err)
+		return nil, err
 	}
 
 	slog.Debug(fmt.Sprintf("\n generating keys for %v keysets\n ", len(keysetIndex)))
-	keysetsMap := s.store.GetKeysetsMapCopy()
-	for i, val := range keysetsMap {
+	keysetsMap := store.GetKeysetsMapCopy()
+	for _, val := range keysetsMap {
 		keysetAmounts, exists := keysetIndex[hex.EncodeToString(val.Id)]
 		if !exists {
 			continue
 		}
 
-		hexId := hex.EncodeToString(val.Id)
-		privateKeysets[i] = MintKeyset{Id: val.Id, DerivationPath: val.DerivationPath, Unit: val.Unit, DerivationPathIdx: val.DerivationPathIdx, Active: val.Active, InputFeePpk: val.InputFeePpk, FinalExpiry: val.FinalExpiry, Amounts: nil, Version: 0, Keys: nil}
-		keyset := MintKeyset{Id: val.Id, DerivationPath: val.DerivationPath, Unit: val.Unit, DerivationPathIdx: val.DerivationPathIdx, Active: val.Active, InputFeePpk: val.InputFeePpk, Keys: make(map[uint64]crypto.KeyPair), FinalExpiry: val.FinalExpiry, Amounts: nil, Version: 0}
+		hexID := hex.EncodeToString(val.Id)
+		keyset := MintKeyset{
+			Id:                val.Id,
+			DerivationPath:    val.DerivationPath,
+			Unit:              val.Unit,
+			DerivationPathIdx: val.DerivationPathIdx,
+			Active:            val.Active,
+			InputFeePpk:       val.InputFeePpk,
+			Keys:              make(map[uint64]crypto.KeyPair),
+			FinalExpiry:       val.FinalExpiry,
+			Amounts:           val.Amounts,
+			Version:           val.Version,
+			Legacy:            val.Legacy,
+		}
 
 		keys, err := KeyDerivation(masterKey, val.DerivationPath, keysetAmounts)
 		if err != nil {
-			return privateKeysets, fmt.Errorf("KeyDerivation(mintKey,&keyset, seed, unit) %w", err)
+			return privateKeysets, fmt.Errorf("KeyDerivation(masterKey, val.DerivationPath, keysetAmounts): %w", err)
 		}
 		keyset.Keys = keys
-		privateKeysets[hexId] = keyset
+		privateKeysets[hexID] = keyset
 	}
+
 	return privateKeysets, nil
 }

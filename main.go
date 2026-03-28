@@ -120,7 +120,7 @@ func main() {
 
 	// Create a new gRPC server
 	s := grpc.NewServer(grpc.Creds(creds),
-		grpc.ChainUnaryInterceptor(routes.SchemaVersion()))
+		grpc.ChainUnaryInterceptor(routes.SchemaVersion(), routes.AuthMiddleware(sqlite)))
 
 	// Register the service
 	sig.RegisterSignatoryServer(s, &routes.Server{

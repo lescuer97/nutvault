@@ -21,6 +21,7 @@ import (
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/elnosh/gonuts/crypto"
+	"github.com/lescuer97/bip85"
 	"github.com/lescuer97/nutmix/api/cashu"
 	"github.com/tyler-smith/go-bip39"
 )
@@ -335,16 +336,9 @@ func GenerateKeypairs(versionKey *hdkeychain.ExtendedKey, values KeysetAmounts) 
 }
 
 func GetMasterKey() (*hdkeychain.ExtendedKey, error) {
-	seedFromDBUS, err := getNutmixSignerKey()
-	defer func() {
-		seedFromDBUS = ""
-	}()
+	seedFromDBUS, err := getMasterMnemonic()
 	if err != nil {
 		return nil, fmt.Errorf("signer.getSignerPrivateKey(). %w", err)
-	}
-
-	if !bip39.IsMnemonicValid(seedFromDBUS) {
-		return nil, errors.New("mnemonic is not valid or not in English")
 	}
 	seedBytes := bip39.NewSeed(seedFromDBUS, "")
 
@@ -354,6 +348,43 @@ func GetMasterKey() (*hdkeychain.ExtendedKey, error) {
 		return nil, fmt.Errorf(" bip32.NewMasterKey(privateKey.Serialize()). %w", err)
 	}
 	return masterKey, nil
+}
+
+func getMasterMnemonic() (string, error) {
+	seedFromDBUS, err := getNutmixSignerKey()
+	defer func() {
+		seedFromDBUS = ""
+	}()
+	if err != nil {
+		return "", fmt.Errorf("signer.getSignerPrivateKey(). %w", err)
+	}
+	if !bip39.IsMnemonicValid(seedFromDBUS) {
+		return "", errors.New("mnemonic is not valid or not in English")
+	}
+	return seedFromDBUS, nil
+}
+
+func getMasterBIP85Key(mnemonic string) (*bip85.Bip85, error) {
+	if !bip39.IsMnemonicValid(mnemonic) {
+		return nil, errors.New("mnemonic is not valid or not in English")
+	}
+	bip85Key, err := bip85.NewBip85FromMnemonic(mnemonic, "")
+	if err != nil {
+		return nil, fmt.Errorf("bip85.NewBip85FromMnemonic(mnemonic, \"\"): %w", err)
+	}
+	return bip85Key, nil
+}
+
+func getDerivedAccountKey(bip85Key *bip85.Bip85, derivation uint32) (*hdkeychain.ExtendedKey, error) {
+	derivedKey, err := bip85Key.DeriveToXpriv(derivation)
+	if err != nil {
+		return nil, fmt.Errorf("bip85Key.DeriveToXpriv(derivation): %w", err)
+	}
+	accountKey, err := hdkeychain.NewMaster(derivedKey.Key, &chaincfg.MainNetParams)
+	if err != nil {
+		return nil, fmt.Errorf("hdkeychain.NewMaster(derivedKey.Key, &chaincfg.MainNetParams): %w", err)
+	}
+	return accountKey, nil
 }
 
 func GetKeysetsFromSeeds(seeds []database.Seed, mintKey *hdkeychain.ExtendedKey) (map[string]MintPublicKeyset, map[string]MintPublicKeyset, error) {
