@@ -17,6 +17,11 @@ This should be a BIP-39 seedphrase.
 just seed
 ```
 
+## Multi-account support
+
+Multi-account handling currently lives in the [`multi_account_signer_2` branch](https://github.com/lescuer97/nutvault/tree/multi_account_signer_2).
+If you want to work with or test that version, check out that branch instead of `main`.
+
 To run the signer do:
 ```bash
 just dev
@@ -35,5 +40,3 @@ The files should be called:
 - server-cert.pem 
 - server-key.pem
 - ca-cert.pem
-
-
