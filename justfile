@@ -6,7 +6,7 @@ SERVICE_NAME := "nutmix_remote_signer.service"
 default: build
 
 # Build the signer binary
-build: proto
+build: proto templ
   @echo "Building {{BINARY_NAME}}..."
   @go build -o {{BINARY_NAME}} .
 
@@ -14,13 +14,17 @@ build: proto
 proto: 
   protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative --experimental_allow_proto3_optional gen/signer.proto
 
+# Run templ code generation
+templ:
+  go run github.com/a-h/templ/cmd/templ@v0.3.943 generate
+
 # Store seedphrase in libsecret
 seed:
   @echo "NOTE: this command prompts for the seedphrase as a password"
   @secret-tool store --label="nutvault-seed" label nutvault-seed
 
 # Run the signer in development mode
-dev: proto
+dev: proto templ
   go run .
 
 # Run tests

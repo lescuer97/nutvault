@@ -1,0 +1,58 @@
+package templates
+
+import "nutmix_remote_signer/database"
+
+templ Dashboard(accounts []database.Account) {
+	@Layout("Dashboard") {
+		<div class="container mx-auto py-8 px-6">
+			<div class="flex items-center justify-between mb-6">
+				<h1 class="text-2xl font-bold">Accounts</h1>
+				<button hx-post="/createkey" hx-target="#cards-list" hx-swap="afterbegin" class="rounded bg-indigo-600 text-white px-4 py-2">Create key</button>
+			</div>
+			<div id="cards-list" class="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+				for _, acct := range accounts {
+					@KeyCard(acct)
+				}
+			</div>
+		</div>
+	}
+}
+
+templ SignerDashboard(account database.Account) {
+	@Layout("Signer Dashboard") {
+		<div class="container mx-auto py-8 px-6">
+			<div class="flex items-center justify-between mb-6">
+				<h1 class="text-2xl font-semibold tracking-tight">Signer Dashboard</h1>
+				@SignerToggleButton(account.Id, account.Active)
+			</div>
+			<div class="flex flex-col md:flex-row gap-6">
+				<div class="md:w-1/3">
+					@KeyCardNoButton(account)
+				</div>
+				<div class="md:w-2/3 flex flex-col gap-6">
+					<div class="rounded-xl border bg-white p-4 shadow-sm">
+						<h2 class="text-lg font-semibold mb-2">Certificates</h2>
+						<div class="space-y-3">
+							@CertRow(account.Id, "ca", "CA Certificate", false, "")
+							@CertRow(account.Id, "cert", "TLS Certificate", false, "")
+							@CertRow(account.Id, "key", "TLS Key", false, "")
+						</div>
+					</div>
+				</div>
+			</div>
+			<!-- Keysets card with full width indentation -->
+			<div class="rounded-xl mt-4 border bg-white p-4 shadow-sm text-sm text-slate-500">
+				<div
+					id={ "keysets-root-" + account.Id }
+					hx-get={ "/signer/" + account.Id + "/keysets" }
+					hx-trigger="load"
+					hx-target={ "#" + "keysets-root-" + account.Id }
+					hx-swap="outerHTML"
+					class="py-2"
+				>
+					Loading keysets...
+				</div>
+			</div>
+		</div>
+	}
+}

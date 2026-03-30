@@ -98,6 +98,43 @@ func (s *SqliteDB) UpdateAccountActive(id string, active bool) error {
 	return nil
 }
 
+func (s *SqliteDB) UpdateAccountName(id string, name string) error {
+	stmt, err := s.Db.Prepare("UPDATE accounts SET name = ? WHERE id = ?")
+	if err != nil {
+		return fmt.Errorf("prepare UpdateAccountName: %w", err)
+	}
+	defer func() {
+		_ = stmt.Close()
+	}()
+
+	_, err = stmt.Exec(name, id)
+	if err != nil {
+		return fmt.Errorf("exec UpdateAccountName: %w", err)
+	}
+	return nil
+}
+
+func (s *SqliteDB) GetAccountsByNpub(npub []byte) ([]Account, error) {
+	rows, err := s.Db.Query("SELECT active, npub, id, name, derivation, created_at, client_pubkey_fp FROM accounts WHERE npub = ? ORDER BY created_at ASC", npub)
+	if err != nil {
+		return nil, fmt.Errorf("query GetAccountsByNpub: %w", err)
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	accounts := []Account{}
+	for rows.Next() {
+		account, err := scanAccount(rows)
+		if err != nil {
+			return nil, err
+		}
+		accounts = append(accounts, account)
+	}
+
+	return accounts, rows.Err()
+}
+
 func (s *SqliteDB) GetAccountsWithSeeds() ([]AccountWithSeeds, error) {
 	query := `
 		SELECT

@@ -6,10 +6,12 @@ import (
 	"log"
 	"log/slog"
 	"net"
+	accountmanager "nutmix_remote_signer/account_manager"
 	"nutmix_remote_signer/database"
 	sig "nutmix_remote_signer/gen"
 	"nutmix_remote_signer/routes"
 	"nutmix_remote_signer/signer"
+	"nutmix_remote_signer/web"
 	"os"
 	"strconv"
 	"time"
@@ -22,7 +24,7 @@ const abstractSocket = "@signer_socket"
 
 func main() {
 	err := godotenv.Load()
-	if err != nil {
+	if err != nil && !os.IsNotExist(err) {
 		log.Panicf(`godotenv.Load(). %+v`, err)
 	}
 
@@ -90,9 +92,35 @@ func main() {
 		AutoRotate: autoRotate,
 	}
 
-	signer, err := signer.SetupLocalSigner(sqlite, config)
+	localSigner, err := signer.SetupLocalSigner(sqlite, config)
 	if err != nil {
 		log.Panicf(`signer.SetupLocalSigner(sqlite). %+v`, err)
+	}
+
+	manager := accountmanager.NewManager(&sqlite, localSigner)
+	enableWebUI, err := strconv.ParseBool(getEnvOrDefault("ENABLE_WEB_UI", "false"))
+	if err != nil {
+		enableWebUI = false
+	}
+	if enableWebUI {
+		caCertPath := getEnvOrDefault("TLS_CA_CERT_PATH", "tls/ca-cert.pem")
+		caKeyPath := getEnvOrDefault("TLS_CA_KEY_PATH", "tls/ca-key.pem")
+		caCertPEM, err := os.ReadFile(caCertPath)
+		if err != nil {
+			log.Panicf("os.ReadFile(%s). %+v", caCertPath, err)
+		}
+		caKeyPEM, err := os.ReadFile(caKeyPath)
+		if err != nil {
+			log.Panicf("os.ReadFile(%s). %+v", caKeyPath, err)
+		}
+		certDir := getEnvOrDefault("ACCOUNT_TLS_DIR", GetAccountCertificatesDir(homeDir))
+		manager.ConfigureCertificates(caCertPEM, caKeyPEM, certDir)
+		webAddr := getEnvOrDefault("WEB_UI_ADDR", "127.0.0.1:8080")
+		go func() {
+			if err := web.RunHTTPServer(webAddr, &manager); err != nil {
+				slog.Error("failed to serve web ui", slog.Any("error", err))
+			}
+		}()
 	}
 
 	var listener net.Listener
@@ -124,7 +152,7 @@ func main() {
 
 	// Register the service
 	sig.RegisterSignatoryServer(s, &routes.Server{
-		Signer:          signer,
+		Signer:          localSigner,
 		SignatoryServer: nil,
 	})
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 
 	"google.golang.org/grpc/credentials"
 )
@@ -54,14 +55,17 @@ func MakeSureFilePathExists(dirPath string, filename string) error {
 }
 
 func GetTlsSecurityCredential() credentials.TransportCredentials {
+	serverCertPath := getEnvOrDefault("TLS_SERVER_CERT_PATH", "tls/server-cert.pem")
+	serverKeyPath := getEnvOrDefault("TLS_SERVER_KEY_PATH", "tls/server-key.pem")
+	caCertPath := getEnvOrDefault("TLS_CA_CERT_PATH", "tls/ca-cert.pem")
 	// Load server certificate and key
-	serverCert, err := tls.LoadX509KeyPair("tls/server-cert.pem", "tls/server-key.pem")
+	serverCert, err := tls.LoadX509KeyPair(serverCertPath, serverKeyPath)
 	if err != nil {
 		log.Fatalf("Failed to load server cert: %v", err)
 	}
 
 	// Load CA certificate
-	caCert, err := os.ReadFile("tls/ca-cert.pem")
+	caCert, err := os.ReadFile(caCertPath)
 	if err != nil {
 		log.Fatalf("Failed to load CA cert: %v", err)
 	}
@@ -85,4 +89,16 @@ func GetTlsSecurityCredential() credentials.TransportCredentials {
 	creds := credentials.NewTLS(tlsConfig)
 	return creds
 
+}
+
+func getEnvOrDefault(envKey string, fallback string) string {
+	value := os.Getenv(envKey)
+	if value == "" {
+		return fallback
+	}
+	return value
+}
+
+func GetAccountCertificatesDir(configDir string) string {
+	return filepath.Join(configDir, "certificates")
 }

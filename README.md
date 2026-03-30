@@ -22,6 +22,9 @@ To run the signer do:
 just dev
 ```
 
+If you want to run the web UI as well, set `ENABLE_WEB_UI=true` and optionally set `WEB_UI_ADDR`.
+The UI uses Nostr login in the browser and provisions per-account client certificates for gRPC mTLS.
+
 ## How the signer communicates
 The signer communicates by default using a linux abstract socket. This allows the signer to run in a whole different
 isolated user. 
@@ -36,4 +39,24 @@ The files should be called:
 - server-key.pem
 - ca-cert.pem
 
+If you enable the web UI for account creation, you also need a CA private key for issuing client certificates:
+- ca-key.pem
+
+Optional environment overrides:
+- `TLS_SERVER_CERT_PATH`
+- `TLS_SERVER_KEY_PATH`
+- `TLS_CA_CERT_PATH`
+- `TLS_CA_KEY_PATH`
+- `ACCOUNT_TLS_DIR`
+
+## UI development
+
+Templ templates are used for the web UI.
+
+Generate template code with:
+```bash
+just templ
+```
+
+`just build` and `just dev` already run template generation alongside protobuf generation.
 
